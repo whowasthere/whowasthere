@@ -30,7 +30,8 @@ defmodule WhoWasThere.BillingTest do
     new_txid = String.replace_suffix(@txid, "vY4", "vZ9")
     assert {:ok, renewed} = Billing.renew(pay.id, new_txid, "a@b.co")
     assert renewed.kind == "paid"
-    assert renewed.hits_month == 0 or renewed.hits_month == pay.hits_month
+    assert renewed.id == pay.id
+    assert renewed.txid == new_txid
   end
 
   test "PAY_BYPASS_TXID skips chain verification" do
@@ -49,9 +50,11 @@ defmodule WhoWasThere.BillingTest do
       assert {:ok, again} = Billing.open_paid(bypass, "ops@example.com")
       assert again.id == pay.id
 
-      assert {:ok, trial} = Billing.open_trial(nil)
+      assert {:ok, trial} = Billing.open_trial("ops@example.com")
       assert {:ok, renewed} = Billing.renew(trial.id, bypass, "ops@example.com")
-      assert renewed.id == bypass
+      assert renewed.id == trial.id
+      assert renewed.kind == "paid"
+      assert Billing.status(trial.id).kind == "paid"
     after
       Application.put_env(:whowasthere, :pay_bypass_txid, previous)
       Application.put_env(:whowasthere, :solana_verify, previous_verify)

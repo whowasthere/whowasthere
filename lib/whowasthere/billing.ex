@@ -104,9 +104,18 @@ defmodule WhoWasThere.Billing do
   def status(id) when is_binary(id) do
     case cached(id) || load_cache(id) do
       nil -> nil
-      meta -> status_from_meta(meta)
+      meta -> status_from_meta(follow_successor(meta))
     end
   end
+
+  def current_id(id) when is_binary(id) do
+    case cached(id) || load_cache(id) do
+      nil -> id
+      meta -> follow_successor(meta).id
+    end
+  end
+
+  def current_id(_), do: nil
 
   def open_trial(email \\ nil) do
     with {:ok, email} <- normalize_email(email) do
@@ -176,31 +185,35 @@ defmodule WhoWasThere.Billing do
          {:ok, to_txid} <- normalize_txid(to_txid),
          %Payment{} = from <- get(from_id) || get_by_txid(from_id),
          :ok <- Solana.verify_usdc_payment(to_txid, wallet(), @price_usdc) do
-      cond do
-        bypass_txid?(to_txid) ->
-          renew_bypass(from, to_txid, email)
-
-        true ->
-          with :ok <- ensure_fresh_txid(to_txid) do
-            insert_renewal(from, to_txid, email)
-          end
-      end
+      {:ok, promote(from, to_txid, email)}
     else
       nil -> {:error, :unknown_payment}
       other -> other
     end
   end
 
-  defp renew_bypass(from, to_txid, email) do
-    case get(to_txid) || get_by_txid(to_txid) do
-      %Payment{} = existing ->
-        updated = refresh_paid(existing, email || from.email || existing.email)
-        reattach_sites(from.id, updated.id)
-        if from.id != updated.id, do: :ets.delete(@table, from.id)
-        {:ok, updated}
+  # Keep the id already baked into dashboard tokens and ingest keys.
+  # A new txid is stored on that same payment when it is free; otherwise
+  # the existing paid row is only used as a source of expiry.
+  defp promote(from, to_txid, email) do
+    existing = get(to_txid) || get_by_txid(to_txid)
 
-      nil ->
-        insert_renewal(from, to_txid, email)
+    cond do
+      from.id == to_txid or from.txid == to_txid ->
+        refresh_paid(from, email)
+
+      match?(%Payment{id: id} when id != from.id, existing) ->
+        other = existing
+        refreshed = refresh_paid(other, email || from.email)
+        upgraded = upgrade_in_place(from, to_txid, email || from.email || other.email, refreshed)
+        reattach_sites(other.id, upgraded.id)
+        upgraded
+
+      true ->
+        case ensure_fresh_txid(to_txid) do
+          :ok -> upgrade_in_place(from, to_txid, email || from.email, nil)
+          {:error, :txid_used} -> refresh_paid(from, email)
+        end
     end
   end
 
@@ -224,33 +237,66 @@ defmodule WhoWasThere.Billing do
     {:ok, inserted}
   end
 
-  defp insert_renewal(from, to_txid, email) do
+  defp upgrade_in_place(from, to_txid, email, source) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    from_meta = cached(from.id) || cache_put(from)
-    base = if DateTime.compare(from.expires_at, now) == :gt, do: from.expires_at, else: now
+    source_exp = source && source.expires_at
+    from_exp = from.expires_at
 
-    new = %Payment{
-      id: to_txid,
+    base =
+      [source_exp, from_exp, now]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.max(DateTime)
+
+    base = if from.kind == "trial", do: now, else: base
+    txid = if txid_free?(to_txid, from.id), do: to_txid, else: from.txid
+
+    changes = %{
       kind: "paid",
-      txid: to_txid,
-      email: email || from.email,
+      txid: txid,
       expires_at: DateTime.add(base, @paid_days * 86_400, :second),
-      month: from_meta.month,
-      hits_month: from_meta.hits_month,
-      notices: "",
-      created_at: now
+      notices: drop_expiry_notices(from.notices)
     }
 
-    {:ok, inserted} =
-      Repo.transaction(fn ->
-        inserted = Repo.insert!(new)
-        reattach_sites(from.id, inserted.id)
-        inserted
-      end)
+    changes =
+      if is_binary(email) and email != "", do: Map.put(changes, :email, email), else: changes
 
-    cache_put(inserted)
-    :ets.delete(@table, from.id)
-    {:ok, inserted}
+    updated = from |> Ecto.Changeset.change(changes) |> Repo.update!()
+    cache_put(updated)
+    WhoWasThere.Collector.reattach_payment(from.id, updated.id)
+    updated
+  end
+
+  defp txid_free?(txid, keep_id) do
+    case get_by_txid(txid) do
+      nil -> true
+      %{id: ^keep_id} -> true
+      _ -> false
+    end
+  end
+
+  defp follow_successor(meta) do
+    case successor_id(meta.notices) do
+      nil ->
+        meta
+
+      next ->
+        case cached(next) || load_cache(next) do
+          nil -> meta
+          other -> follow_successor(other)
+        end
+    end
+  end
+
+  defp successor_id(notices) do
+    notices
+    |> to_string()
+    |> String.split(",", trim: true)
+    |> Enum.find_value(fn tag ->
+      case String.split(tag, ":", parts: 2) do
+        ["successor", id] -> id
+        _ -> nil
+      end
+    end)
   end
 
   defp refresh_paid(%Payment{} = pay, email) do
@@ -316,7 +362,7 @@ defmodule WhoWasThere.Billing do
   end
 
   def allow_pageview?(payment_id) when is_binary(payment_id) do
-    case ensure_meta(payment_id) do
+    case ensure_meta(current_id(payment_id) || payment_id) do
       nil -> false
       meta -> active?(meta) and meta.hits_month < @month_cap
     end
@@ -325,7 +371,7 @@ defmodule WhoWasThere.Billing do
   def allow_pageview?(_), do: false
 
   def allow_traffic?(payment_id) when is_binary(payment_id) do
-    case ensure_meta(payment_id) do
+    case ensure_meta(current_id(payment_id) || payment_id) do
       nil -> false
       meta -> active?(meta)
     end
@@ -334,7 +380,7 @@ defmodule WhoWasThere.Billing do
   def allow_traffic?(_), do: false
 
   def record_pageview(payment_id) when is_binary(payment_id) do
-    case ensure_meta(payment_id) do
+    case ensure_meta(current_id(payment_id) || payment_id) do
       nil ->
         :ok
 

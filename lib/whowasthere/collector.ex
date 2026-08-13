@@ -28,9 +28,14 @@ defmodule WhoWasThere.Collector do
   def site?(id), do: :ets.lookup(:wwt_sites, id) != []
 
   def site(id) do
-    case :ets.lookup(:wwt_sites, id) do
-      [{^id, meta}] -> Map.put(meta, :id, id)
-      [] -> nil
+    case lookup_site(id) do
+      nil ->
+        nil
+
+      meta ->
+        meta = reconcile_payment(id, meta)
+        pay = Billing.current_id(meta[:payment_id]) || meta[:payment_id]
+        meta |> Map.put(:id, id) |> Map.put(:payment_id, pay)
     end
   end
 
@@ -649,7 +654,13 @@ defmodule WhoWasThere.Collector do
 
     case lookup_site(id) do
       nil ->
-        %{id: id, host: host, nonce: nonce, payment_id: payment_id, token: token}
+        payment_id = Billing.current_id(payment_id) || payment_id
+
+        if is_binary(nonce) and is_binary(payment_id) do
+          put_site(id, host, nonce, payment_id)
+        else
+          %{id: id, host: host, nonce: nonce, payment_id: payment_id, token: token}
+        end
 
       %{nonce: claimed} when is_binary(claimed) and claimed != nonce ->
         nil

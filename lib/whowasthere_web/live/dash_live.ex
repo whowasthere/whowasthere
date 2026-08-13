@@ -76,6 +76,7 @@ defmodule WhoWasThereWeb.DashLive do
         _ -> socket.assigns[:payment_id]
       end
 
+    payment_id = Billing.current_id(payment_id) || payment_id
     billing = Billing.status(payment_id)
 
     assign(socket,
