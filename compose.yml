@@ -24,6 +24,7 @@ services:
       - "traefik.http.routers.whowasthere.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.whowasthere.entrypoints=websecure"
       - "traefik.http.routers.whowasthere.tls=true"
+      # Behind Cloudflare orange cloud the server uses certresolver=ledns (DNS-01).
       - "traefik.http.routers.whowasthere.tls.certresolver=le"
       - "traefik.http.services.whowasthere.loadbalancer.server.port=4000"
     healthcheck:
