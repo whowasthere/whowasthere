@@ -48,6 +48,14 @@ defmodule WhoWasThereWeb.Layouts do
         <nav class="flex items-center gap-2">
           <a href={~p"/"} class="chip">docs</a>
           <a href={~p"/#pricing"} class="chip">pricing</a>
+          <a
+            href="https://github.com/whowasthere/whowasthere"
+            class="chip"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            github
+          </a>
           <a href={~p"/new"} class="chip">
             <span class="text-primary">$</span> curl /new
           </a>
