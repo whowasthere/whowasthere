@@ -30,6 +30,7 @@ defmodule WhoWasThereWeb.DashLiveTest do
     {:ok, view, html} = live(conn, "/d/#{site.token}")
     assert html =~ "pricing"
     assert render(view) =~ "pageviews"
+    assert render(view) =~ "Unique visitors"
     assert has_element?(view, "#traffic-chart")
     assert has_element?(view, "#chart-devices")
     assert has_element?(view, "#chart-browsers")

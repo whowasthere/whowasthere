@@ -1,6 +1,6 @@
 FROM elixir:1.20-alpine AS build
 WORKDIR /app
-RUN apk add --no-cache build-base git
+RUN apk add --no-cache build-base git nodejs npm
 ENV MIX_ENV=prod
 COPY mix.exs mix.lock ./
 COPY config config
@@ -10,6 +10,7 @@ COPY lib lib
 COPY assets assets
 COPY README.md README.md
 COPY LICENSE LICENSE
+RUN cd assets && npm ci --omit=dev
 RUN mix compile && mix assets.deploy && mix release
 
 FROM alpine:3.22

@@ -1,23 +1,24 @@
 defmodule WhoWasThereWeb.DashLive do
   use WhoWasThereWeb, :live_view
 
-  import WhoWasThereWeb.Charts
+  import WhoWasThereWeb.Charts, only: [panel: 1]
 
   alias WhoWasThere.{Analytics, Billing, Collector, Format}
+  alias WhoWasThereWeb.Charts
 
   @ranges [{:today, "today"}, {:d7, "7d"}, {:d30, "30d"}, {:d90, "90d"}]
 
-  @dim_titles [
-    {"entry", "Landings"},
-    {"exit", "Exits"},
-    {"page", "Pages"},
-    {"ref", "Referrers"},
-    {"src", "UTM / source"},
-    {"medium", "UTM / medium"},
-    {"campaign", "UTM / campaign"},
-    {"lang", "Languages"},
-    {"click", "Clicks"},
-    {"event", "Events"}
+  @dim_cards [
+    {"page", "Pages", "Views by path"},
+    {"entry", "Landings", "First page of the visit"},
+    {"exit", "Exits", "Last page before they left"},
+    {"ref", "Referrers", "Sites that sent this traffic"},
+    {"src", "Source", "UTM source"},
+    {"medium", "Medium", "UTM medium"},
+    {"campaign", "Campaign", "UTM campaign"},
+    {"lang", "Languages", "Browser language"},
+    {"click", "Clicks", "Buttons, links, [data-wwt]"},
+    {"event", "Events", "Custom window.wwt() calls"}
   ]
 
   @impl true
@@ -64,8 +65,6 @@ defmodule WhoWasThereWeb.DashLive do
     report = Analytics.report(socket.assigns.id, socket.assigns.range)
     traffic = traffic_points(report)
     peak = traffic |> Enum.map(& &1.value) |> Enum.max(fn -> 0 end)
-
-    # The host is only known once it is locked: from `?host=` on /new, or from the first hit.
     host = report.host || socket.assigns.host
 
     payment_id =
@@ -77,18 +76,34 @@ defmodule WhoWasThereWeb.DashLive do
     payment_id = Billing.current_id(payment_id) || payment_id
     billing = Billing.status(payment_id)
 
-    assign(socket,
+    charts = %{
+      "traffic-chart" => Charts.line_payload(traffic),
+      "chart-devices" => Charts.pie_payload("device", report.dims["device"] || []),
+      "chart-browsers" => Charts.pie_payload("browser", report.dims["browser"] || []),
+      "chart-os" => Charts.pie_payload("os", report.dims["os"] || []),
+      "chart-sessions" => Charts.pie_payload("session", session_slices(report)),
+      "chart-countries" => Charts.bar_payload("country", report.dims["country"] || []),
+      "chart-viewport" => Charts.bar_payload("width", report.dims["width"] || [])
+    }
+
+    socket
+    |> assign(
       report: report,
       host: host,
       page_title: host || socket.assigns.id,
       traffic: traffic,
       peak: peak,
-      session_slices: session_slices(report),
+      charts: charts,
       payment_id: payment_id,
       billing: billing,
-      dim_titles: @dim_titles,
+      dim_cards: @dim_cards,
       ranges: @ranges
     )
+    |> push_charts(charts)
+  end
+
+  defp push_charts(socket, charts) do
+    if connected?(socket), do: push_event(socket, "charts", charts), else: socket
   end
 
   @impl true
@@ -127,10 +142,10 @@ defmodule WhoWasThereWeb.DashLive do
               {@host || "no host yet"}
             </h1>
             <p class="num mt-2 text-xs text-base-content/40">
-              {@id} · {@report.from} → {@report.to}
+              {@id} · {Date.to_iso8601(@report.from)} → {Date.to_iso8601(@report.to)}
             </p>
             <p :if={is_nil(@host)} class="mt-1 text-xs text-base-content/35">
-              The first hit names this site.
+              The first visit will name this site.
             </p>
           </div>
 
@@ -152,22 +167,20 @@ defmodule WhoWasThereWeb.DashLive do
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p class="eyebrow">plan</p>
-              <p class="num mt-1 text-sm">
+              <p class="mt-1 text-sm">
                 <span class={[
+                  "font-medium capitalize",
                   @billing.kind == "paid" && "text-primary",
                   @billing.expired? && "text-error"
                 ]}>
                   {@billing.kind}
                 </span>
-                ·
-                <%= if @billing.expired? do %>
-                  expired
-                <% else %>
-                  {@billing.days_left}d left
-                <% end %>
+                <span class="text-base-content/45">
+                  · {plan_aside(@billing)}
+                </span>
               </p>
-              <p class="mt-1 text-xs text-base-content/40">
-                {@billing.hits_month} / {@billing.month_cap} pageviews this month
+              <p class="mt-1 text-xs text-base-content/45">
+                {Format.commas(@billing.hits_month)} of {Format.commas(@billing.month_cap)} pageviews this month
               </p>
             </div>
             <div class="h-1.5 w-full overflow-hidden rounded-full bg-base-content/10 sm:max-w-xs">
@@ -188,84 +201,109 @@ defmodule WhoWasThereWeb.DashLive do
         </section>
 
         <section class="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <.stat label="pageviews" value={Format.compact(@report.pageviews)} accent />
           <.stat
-            label="uniques"
+            label="Pageviews"
+            value={Format.compact(@report.pageviews)}
+            hint="views in this range"
+            accent
+          />
+          <.stat
+            label="Unique visitors"
             value={Format.compact(@report.uniques)}
             hint={unique_hint(@range)}
           />
-          <.stat label="sessions" value={Format.compact(@report.sessions)} />
-          <.stat label="bounce rate" value={Format.pct(@report.bounce_rate)} hint="one-page visits" />
-          <.stat label="avg. time" value={Format.duration(@report.avg_ms)} hint="per session" />
+          <.stat
+            label="Sessions"
+            value={Format.compact(@report.sessions)}
+            hint="visits in this range"
+          />
+          <.stat
+            label="Bounce rate"
+            value={Format.pct(@report.bounce_rate)}
+            hint="left after one page"
+          />
+          <.stat label="Avg. time" value={Format.duration(@report.avg_ms)} hint="per session" />
         </section>
 
-        <.area_chart
+        <.panel
           id="traffic-chart"
-          title={if @range == :today, do: "Traffic · by hour UTC", else: "Traffic · by day"}
-          hint={if @range == :today, do: "pageviews each hour", else: "pageviews and uniques"}
-          points={@traffic}
-          peak={@peak}
+          title="Traffic"
+          hint={
+            if @range == :today,
+              do: "Pageviews by hour, UTC",
+              else: "Pageviews and unique visitors by day"
+          }
+          payload={@charts["traffic-chart"]}
+          peak={"peak #{Format.compact(@peak)}"}
         />
 
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <.donut_chart
+          <.panel
             id="chart-devices"
             title="Devices"
-            rows={@report.dims["device"] || []}
+            hint="Desktop, phone, tablet"
+            payload={@charts["chart-devices"]}
+            height="h-52"
           />
-          <.donut_chart
+          <.panel
             id="chart-browsers"
             title="Browsers"
-            rows={@report.dims["browser"] || []}
+            payload={@charts["chart-browsers"]}
+            height="h-52"
           />
-          <.donut_chart id="chart-os" title="OS" rows={@report.dims["os"] || []} />
-          <.donut_chart
+          <.panel id="chart-os" title="Operating systems" payload={@charts["chart-os"]} height="h-52" />
+          <.panel
             id="chart-sessions"
-            title="Sessions"
-            unit="sessions"
-            rows={@session_slices}
+            title="Engagement"
+            hint="Bounced vs stayed"
+            payload={@charts["chart-sessions"]}
+            height="h-52"
           />
         </section>
 
         <section class="grid gap-4 lg:grid-cols-2">
-          <.bar_chart
+          <.panel
             id="chart-countries"
             title="Countries"
-            hint="top 10 by pageviews"
-            rows={@report.dims["country"] || []}
+            hint="Top 10 by pageviews"
+            payload={@charts["chart-countries"]}
+            height="h-56"
           />
-          <.bar_chart
+          <.panel
             id="chart-viewport"
-            title="Viewport"
-            hint="css width buckets"
-            rows={@report.dims["width"] || []}
+            title="Screens"
+            hint="Viewport width buckets"
+            payload={@charts["chart-viewport"]}
+            height="h-56"
           />
         </section>
 
         <section class="grid gap-4 lg:grid-cols-2">
           <.dim
             class="lg:col-span-2"
-            title="Journeys"
+            kind="chain"
+            title="Session paths"
             rows={@report.dims["chain"] || []}
-            total={@report.pageviews}
-            hint="one path per session, clicks included, up to 8 steps"
-            wrap
+            hint="One path per visit, clicks included, up to 8 steps"
+            path
           />
           <.dim
             class="lg:col-span-2"
-            title="Steps"
+            kind="flow"
+            title="Page to page"
             rows={@report.dims["flow"] || []}
-            total={@report.pageviews}
-            hint="page A → page B"
+            hint="Consecutive pages in a session"
+            path
           />
         </section>
 
         <section class="wall">
           <.dim
-            :for={{kind, title} <- @dim_titles}
+            :for={{kind, title, hint} <- @dim_cards}
+            kind={kind}
             title={title}
+            hint={hint}
             rows={@report.dims[kind] || []}
-            total={@report.pageviews}
           />
         </section>
       </div>
@@ -288,42 +326,66 @@ defmodule WhoWasThereWeb.DashLive do
       ]}>
         {@value}
       </p>
-      <p class="mt-2 h-3 text-[10px] leading-3 text-base-content/35">{@hint}</p>
+      <p class="mt-2 h-4 text-[11px] leading-4 text-base-content/40">{@hint}</p>
     </div>
     """
   end
 
   attr :title, :string, required: true
+  attr :kind, :string, required: true
   attr :rows, :list, required: true
-  attr :total, :integer, required: true
   attr :hint, :string, default: nil
-  attr :wrap, :boolean, default: false
+  attr :path, :boolean, default: false
   attr :class, :any, default: nil
 
   defp dim(assigns) do
+    total = Enum.reduce(assigns.rows, 0, &(&1.pageviews + &2))
+    max = assigns.rows |> Enum.map(& &1.pageviews) |> Enum.max(fn -> 0 end)
+    assigns = assign(assigns, total: total, max: max)
+
     ~H"""
     <div class={["panel p-5", @class]}>
       <div class="mb-4 flex items-baseline justify-between gap-3">
         <h2 class="eyebrow">{@title}</h2>
-        <span :if={@hint} class="text-[10px] text-base-content/30">{@hint}</span>
+        <span
+          :if={@hint}
+          class="max-w-[18rem] text-right text-[11px] leading-snug text-base-content/35"
+        >
+          {@hint}
+        </span>
       </div>
 
-      <p :if={@rows == []} class="num py-2 text-xs text-base-content/25">no data yet</p>
+      <p :if={@rows == []} class="py-6 text-center text-sm text-base-content/35">Nothing here yet</p>
 
-      <ul class="-mx-2 flex flex-col">
-        <li :for={{row, i} <- Enum.with_index(@rows, 1)} class="row group">
-          <span
-            class="row-bar"
-            style={"width: #{bar_pct(row.pageviews, @total)}%"}
-            aria-hidden="true"
-          />
+      <ul class="flex flex-col gap-1">
+        <li :for={{row, i} <- Enum.with_index(@rows, 1)} class="row">
           <span class="row-rank">{i}</span>
-          <span class={["row-key min-w-0", if(@wrap, do: "break-words", else: "truncate")]}>
-            {row.key}
-          </span>
-          <span class="num text-xs text-base-content/55">
-            {Format.compact(row.pageviews)}
-          </span>
+          <div class="min-w-0 flex-1">
+            <%= if @path do %>
+              <div class="flex flex-wrap items-center gap-1">
+                <%= for {step, si} <- Enum.with_index(Format.path_steps(row.key)) do %>
+                  <span :if={si > 0} class="text-[10px] text-base-content/30">→</span>
+                  <span class={[
+                    "inline-flex max-w-full truncate rounded-md px-1.5 py-0.5 font-mono text-[11px]",
+                    String.starts_with?(step, "click:") && "bg-accent/15 text-accent",
+                    not String.starts_with?(step, "click:") &&
+                      "bg-base-content/8 text-base-content/85"
+                  ]}>
+                    {String.replace_prefix(step, "click:", "")}
+                  </span>
+                <% end %>
+              </div>
+            <% else %>
+              <p class="row-key truncate" title={row.key}>{Format.dim_label(@kind, row.key)}</p>
+            <% end %>
+            <div class="row-track">
+              <span class="row-fill" style={"width: #{bar_pct(row.pageviews, @max)}%"}></span>
+            </div>
+          </div>
+          <div class="shrink-0 text-right">
+            <p class="num text-xs text-base-content/80">{Format.compact(row.pageviews)}</p>
+            <p class="num text-[10px] text-base-content/35">{Format.share(row.pageviews, @total)}</p>
+          </div>
         </li>
       </ul>
     </div>
@@ -332,7 +394,7 @@ defmodule WhoWasThereWeb.DashLive do
 
   defp bar_pct(_n, 0), do: 0
   defp bar_pct(0, _), do: 0
-  defp bar_pct(n, max), do: max(2, round(n / max * 100))
+  defp bar_pct(n, max), do: max(4, round(n / max * 100))
 
   defp traffic_points(%{range: :today, hours: hours}) do
     Enum.map(hours, fn %{hour: hour, pageviews: views} ->
@@ -348,10 +410,19 @@ defmodule WhoWasThereWeb.DashLive do
 
   defp session_slices(%{sessions: sessions, bounces: bounces}) when sessions > 0 do
     engaged = max(sessions - bounces, 0)
-    [%{key: "engaged", pageviews: engaged}, %{key: "bounced", pageviews: bounces}]
+
+    [
+      %{key: "Stayed", pageviews: engaged},
+      %{key: "Bounced", pageviews: bounces}
+    ]
   end
 
   defp session_slices(_), do: []
+
+  defp plan_aside(%{expired?: true}), do: "expired · hits dropped"
+  defp plan_aside(%{days_left: 0}), do: "ends today"
+  defp plan_aside(%{days_left: 1}), do: "1 day left"
+  defp plan_aside(%{days_left: n}), do: "#{n} days left"
 
   defp pad(n), do: n |> Integer.to_string() |> String.pad_leading(2, "0")
 
@@ -361,6 +432,6 @@ defmodule WhoWasThereWeb.DashLive do
 
   defp quota_pct(_), do: 0
 
-  defp unique_hint(:today), do: "today, HyperLogLog"
+  defp unique_hint(:today), do: "estimated for today"
   defp unique_hint(_), do: "sum of daily uniques"
 end
