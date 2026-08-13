@@ -6,29 +6,17 @@ There are no accounts. You create a site with one HTTP request, put a script on 
 
 The tracker is about 2 KB and sets no cookies. SQLite keeps only daily aggregates.
 
-## Run it
-
-You need Elixir 1.17 or newer (1.20 / OTP 29 is what we test on). Mix is enough; SQLite is embedded.
-
-```bash
-mix setup
-mix phx.server
-```
-
-Then open [http://localhost:4000](http://localhost:4000).
-
-```bash
-mix test          # tests
-mix ecto.reset    # wipe and recreate the database
-```
-
-In development the database file is `config/whowasthere_dev.db`.
+**Hosted cloud:** [whowasthere.fyi](https://whowasthere.fyi) — create a site there, no install. **Self-host:** Elixir or Docker on your machine; see [Self-host](#self-host). Do not mix the two: `mix phx.server` serves `http://localhost:4000`, not the public cloud.
 
 ## Create a site
 
+On the hosted cloud:
+
 ```bash
-curl -s http://localhost:4000/new
+curl -s https://whowasthere.fyi/new
 ```
+
+On your own instance, use that origin instead (`http://localhost:4000` in development).
 
 You get something like:
 
@@ -36,9 +24,9 @@ You get something like:
 whowasthere
 
 site     k4m2xq9p
-dash     http://localhost:4000/d/SFMyNTY.…   ← secret; do not put this on the site
-snippet  <script src="http://localhost:4000/w.js" data-w="k4m2xq9p.n4m2xq9p.t_….mac" defer></script>
-pixel    <img src="http://localhost:4000/w.js?s=k4m2xq9p.n4m2xq9p.t_….mac" alt="" width="1" height="1">
+dash     https://whowasthere.fyi/d/SFMyNTY.…   ← secret; do not put this on the site
+snippet  <script src="https://whowasthere.fyi/w.js" data-w="k4m2xq9p.n4m2xq9p.t_….mac" defer></script>
+pixel    <img src="https://whowasthere.fyi/w.js?s=k4m2xq9p.n4m2xq9p.t_….mac" alt="" width="1" height="1">
 pay      t_…   (trial, until …)
 event    window.wwt('signup')
 ```
@@ -46,15 +34,15 @@ event    window.wwt('signup')
 JSON if you prefer it:
 
 ```bash
-curl -sH 'Accept: application/json' http://localhost:4000/new
-curl -s 'http://localhost:4000/new?format=json'
+curl -sH 'Accept: application/json' https://whowasthere.fyi/new
+curl -s 'https://whowasthere.fyi/new?format=json'
 ```
 
 You can pick the public id, lock the site to a host, attach a paid txid, and leave an email for reminders:
 
 ```bash
-curl -s 'http://localhost:4000/new?id=my-blog&host=example.com'
-curl -s 'http://localhost:4000/new?txid=SOLANA_TXID&email=you@example.com'
+curl -s 'https://whowasthere.fyi/new?id=my-blog&host=example.com'
+curl -s 'https://whowasthere.fyi/new?txid=SOLANA_TXID&email=you@example.com'
 ```
 
 The public `id` is 8–32 characters (`a-z`, `0-9`, `_`, `-`). It appears in the snippet as the first part of `data-w`. If that id already has a visit, `/new?id=` returns 409.
@@ -67,10 +55,10 @@ The dashboard lives at `/d/…`. That token is signed, not stored, and is not in
 
 ## Add the tracker
 
-Put this in `<head>` or before `</body>`:
+Put this in `<head>` or before `</body>` (hosted example; on self-host swap in your origin):
 
 ```html
-<script src="https://YOUR_HOST/w.js" data-w="SITE_KEY" defer></script>
+<script src="https://whowasthere.fyi/w.js" data-w="SITE_KEY" defer></script>
 ```
 
 On load it sends a pageview. Client-side route changes (React, Vue, Next, hash routers, Turbo) send another pageview: the tracker wraps `history.pushState` / `replaceState`, listens to `popstate`, `hashchange`, and `navigate`, and also checks the URL every second in case something re-wraps `history`. Clicks use capture on `document` plus `composedPath()`, so nodes added later and Shadow DOM still count. If `sendBeacon` is missing or blocked, it falls back to `fetch` with `keepalive`. Back-forward cache restores (`pageshow`) send a view again. Links, buttons, `[role=button]`, and `[data-wwt]` are tracked (`click:Label`). Set `data-wwt="Buy"` if the visible text is noisy. Heartbeats run while the tab is visible. On leave it sends a close signal. It does not set cookies.
@@ -92,7 +80,7 @@ UTM `source`, `medium`, and `campaign` come from the landing query. The first no
 Without JavaScript you can count pageviews only:
 
 ```html
-<img src="https://YOUR_HOST/w.js?s=SITE_KEY" alt="" width="1" height="1">
+<img src="https://whowasthere.fyi/w.js?s=SITE_KEY" alt="" width="1" height="1">
 ```
 
 Custom events (they do not increment pageviews):
@@ -106,7 +94,7 @@ Names are trimmed to 40 characters.
 
 ## Dashboard
 
-Open the secret URL from `/new`: `http://localhost:4000/d/TOKEN`.
+Open the secret URL from `/new`: `https://whowasthere.fyi/d/TOKEN`.
 
 The public id does not work as a dashboard path. The page updates live. You can switch between today, 7, 30, and 90 days.
 
@@ -140,14 +128,14 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 ## Pricing
 
-**$30 USDC / year** on Solana. One payment covers unlimited sites and a shared **500 000 pageviews / month**. Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew.
+**$30 USDC / year** on Solana. One payment covers unlimited sites and a shared **500 000 pageviews / month**. Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew. Same price on the hosted cloud and on a self-hosted copy (you receive the USDC if you set `PAY_WALLET`).
 
 ```bash
-curl -s http://localhost:4000/pay
+curl -s https://whowasthere.fyi/pay
 # send 30 USDC to the wallet shown, then:
-curl -s 'http://localhost:4000/new?txid=YOUR_TXID&email=you@example.com'
+curl -s 'https://whowasthere.fyi/new?txid=YOUR_TXID&email=you@example.com'
 # or move every site from an old payment onto a new tx:
-curl -s 'http://localhost:4000/renew?from=OLD_PAY_OR_TXID&to=NEW_TXID&email=you@example.com'
+curl -s 'https://whowasthere.fyi/renew?from=OLD_PAY_OR_TXID&to=NEW_TXID&email=you@example.com'
 ```
 
 Email is optional. If you set one (`/new?email=`, `/renew?email=`, or `/notify?pay=&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses Resend when `RESEND_API_KEY` is set.
@@ -203,10 +191,30 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   -H 'Origin: https://example.com' \
   -H 'Content-Type: text/plain' \
   -d '{"s":"KEY_FROM_NEW","n":"v","p":"/hello"}' \
-  http://localhost:4000/w.js
+  https://whowasthere.fyi/w.js
 ```
 
 ## Self-host
+
+This section is only for running **your own** copy. It talks to `localhost` (or whatever origin you bind). The hosted cloud is [whowasthere.fyi](https://whowasthere.fyi); `mix phx.server` does not start that site.
+
+You need Elixir 1.17 or newer (1.20 / OTP 29 is what we test on). Mix is enough; SQLite is embedded.
+
+```bash
+mix setup
+mix phx.server
+```
+
+Then open [http://localhost:4000](http://localhost:4000). Create a site with `curl -s http://localhost:4000/new` — that key and dashboard belong to your process, not to the public cloud.
+
+```bash
+mix test          # tests
+mix ecto.reset    # wipe and recreate the database
+```
+
+In development the database file is `config/whowasthere_dev.db`.
+
+### Production
 
 | Variable | Purpose |
 | --- | --- |

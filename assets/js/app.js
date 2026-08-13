@@ -40,7 +40,17 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
-// Progressive enhancement for the docs page: a copy button on every code block.
+const copyFrom = async (button, text) => {
+  const label = button.dataset.label || "copy"
+  try {
+    await navigator.clipboard.writeText(text)
+    button.textContent = "copied"
+  } catch {
+    button.textContent = "failed"
+  }
+  setTimeout(() => (button.textContent = label), 1500)
+}
+
 const addCopyButtons = () => {
   document.querySelectorAll(".readme pre").forEach(pre => {
     if (pre.dataset.copyable) return
@@ -50,25 +60,102 @@ const addCopyButtons = () => {
     button.type = "button"
     button.className = "copy-btn"
     button.textContent = "copy"
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", () => {
       const code = pre.querySelector("code") || pre
-      try {
-        await navigator.clipboard.writeText(code.innerText.trim())
-        button.textContent = "copied"
-      } catch {
-        button.textContent = "failed"
-      }
-      setTimeout(() => (button.textContent = "copy"), 1500)
+      copyFrom(button, code.innerText.trim())
     })
 
     pre.appendChild(button)
   })
+
+  document.querySelectorAll("[data-copy-target]").forEach(button => {
+    if (button.dataset.copyBound) return
+    button.dataset.copyBound = "1"
+    button.dataset.label = button.textContent.trim() || "copy"
+    button.addEventListener("click", () => {
+      const target = document.getElementById(button.dataset.copyTarget)
+      if (!target) return
+      const code = target.querySelector("code") || target
+      copyFrom(button, code.innerText.trim())
+    })
+  })
+}
+
+const LAST_SITE = "wwt:last-site"
+
+const fillCode = (id, text) => {
+  const el = document.getElementById(id)
+  if (!el || !text) return
+  const code = el.querySelector("code") || el
+  code.textContent = text
+}
+
+const showIssued = (data) => {
+  fillCode("start-snippet", data.snippet)
+  fillCode("start-pixel", data.pixel)
+  fillCode("start-event", data.event)
+  fillCode("start-dash", data.dash)
+
+  const link = document.getElementById("start-dash-open")
+  if (link && data.dash) {
+    link.href = data.dash
+    link.hidden = false
+  }
+
+  const meta = document.getElementById("start-meta")
+  if (meta) {
+    const site = meta.querySelector("[data-site]")
+    const plan = meta.querySelector("[data-plan]")
+    if (site) site.textContent = data.site || ""
+    if (plan) {
+      const until = data.expires ? String(data.expires).slice(0, 10) : ""
+      plan.textContent = until ? `${data.plan} until ${until}` : (data.plan || "")
+    }
+    meta.hidden = false
+  }
+}
+
+const bootStart = () => {
+  const root = document.getElementById("start")
+  if (!root) return
+
+  try {
+    const saved = sessionStorage.getItem(LAST_SITE)
+    if (saved) showIssued(JSON.parse(saved))
+  } catch {
+    /* ignore */
+  }
+
+  const createBtn = document.getElementById("start-create")
+  createBtn?.addEventListener("click", async () => {
+    const url = root.dataset.newUrl
+    if (!url) return
+    createBtn.disabled = true
+    createBtn.textContent = "creating…"
+    try {
+      const res = await fetch(url, {headers: {Accept: "application/json"}})
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "failed")
+      showIssued(data)
+      try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
+      createBtn.textContent = "create another"
+    } catch {
+      createBtn.textContent = "failed"
+      setTimeout(() => (createBtn.textContent = "Create a site"), 1800)
+    } finally {
+      createBtn.disabled = false
+    }
+  })
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", addCopyButtons)
+  document.addEventListener("DOMContentLoaded", () => {
+    addCopyButtons()
+    bootStart()
+  })
 } else {
   addCopyButtons()
+  bootStart()
 }
 
 // expose liveSocket on window for web console debug logs and latency simulation:

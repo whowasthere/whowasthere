@@ -2,9 +2,12 @@ defmodule WhoWasThereWeb.PageController do
   use WhoWasThereWeb, :controller
 
   def home(conn, _params) do
+    base = base_url(conn)
+
     render(conn, :home,
       page_title: "who was there",
-      readme: WhoWasThere.Readme.html(base_url(conn))
+      base_url: base,
+      readme: WhoWasThere.Readme.html(base, omit_intro: true)
     )
   end
 

@@ -45,8 +45,10 @@ defmodule WhoWasThereWeb.Layouts do
           </span>
         </a>
 
-        <nav class="flex items-center gap-2">
-          <a href={~p"/"} class="chip">docs</a>
+        <nav class="flex flex-wrap items-center justify-end gap-2">
+          <a href={~p"/#start"} class="chip">start</a>
+          <a href={~p"/#readme"} class="chip">docs</a>
+          <a href={~p"/#self-host"} class="chip">self-host</a>
           <a href={~p"/#pricing"} class="chip">pricing</a>
           <a
             href="https://github.com/whowasthere/whowasthere"

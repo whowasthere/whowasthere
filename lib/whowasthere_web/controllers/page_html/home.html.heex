@@ -1,5 +1,76 @@
 <Layouts.shell flash={@flash}>
-  <article id="readme" class="readme">
+  <section
+    id="start"
+    class="start"
+    data-new-url={~p"/new?format=json"}
+  >
+    <p class="eyebrow">start</p>
+    <h1 class="display-title">Who Was There</h1>
+    <p class="start-lead">
+      This is the <strong>hosted cloud</strong>. Create a site here, paste the tag, bookmark the
+      dashboard. Seven days free, then <a href="#pricing">$30 USDC / year</a>. To run Mix or Docker
+      on your own machine, see <a href="#self-host">self-host</a>
+      — that is <code>localhost</code>, not this domain.
+    </p>
+
+    <ol class="start-steps">
+      <li class="panel start-step">
+        <span class="start-n num">01</span>
+        <div>
+          <h2>Create a site</h2>
+          <p>
+            Same as <code>curl /new</code>. The dashboard URL is only in this response — it is not
+            in the snippet.
+          </p>
+          <.copy_block id="start-curl" code={"curl -s #{@base_url}/new"} />
+          <button type="button" id="start-create" class="start-go">Create a site</button>
+          <p id="start-meta" class="start-meta" hidden>
+            site <span data-site class="num"></span> · <span data-plan></span>
+          </p>
+        </div>
+      </li>
+
+      <li class="panel start-step">
+        <span class="start-n num">02</span>
+        <div>
+          <h2>Paste the tracker</h2>
+          <p>In <code>&lt;head&gt;</code> or before <code>&lt;/body&gt;</code>. No cookies.</p>
+          <.copy_block
+            id="start-snippet"
+            code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
+          />
+          <p class="start-sub">No JavaScript? A pixel counts pageviews only.</p>
+          <.copy_block
+            id="start-pixel"
+            code={~s(<img src="#{@base_url}/w.js?s=SITE_KEY" alt="" width="1" height="1">)}
+          />
+        </div>
+      </li>
+
+      <li class="panel start-step">
+        <span class="start-n num">03</span>
+        <div>
+          <h2>Keep the dashboard</h2>
+          <p>Private signed URL. Reading your HTML is not enough to open the stats.</p>
+          <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
+          <a
+            id="start-dash-open"
+            class="start-open"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            hidden
+          >
+            Open dashboard
+          </a>
+          <p class="start-sub">Custom events, after the script:</p>
+          <.copy_block id="start-event" code="window.wwt('signup')" />
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <article id="readme" class="readme readme-follow">
     {raw(@readme)}
   </article>
 </Layouts.shell>
