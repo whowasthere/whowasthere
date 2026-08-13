@@ -653,7 +653,6 @@ a.chip:hover {
 .hads-unit {
   display: grid;
   gap: 0.45rem;
-  margin-top: 2rem;
   min-height: 7.5rem;
   padding: 1.15rem 1.25rem 1.2rem;
 }
