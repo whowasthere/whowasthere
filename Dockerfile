@@ -8,6 +8,7 @@ RUN mix local.hex --force && mix local.rebar --force && mix deps.get --only prod
 COPY priv priv
 COPY lib lib
 COPY assets assets
+COPY README.md README.md
 RUN mix compile && mix assets.deploy && mix release
 
 FROM alpine:3.22
