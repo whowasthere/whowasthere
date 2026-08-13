@@ -9,6 +9,7 @@ COPY priv priv
 COPY lib lib
 COPY assets assets
 COPY README.md README.md
+COPY LICENSE LICENSE
 RUN mix compile && mix assets.deploy && mix release
 
 FROM alpine:3.22

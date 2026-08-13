@@ -11,6 +11,12 @@ defmodule WhoWasThereWeb.PageController do
     )
   end
 
+  def license(conn, _params) do
+    conn
+    |> put_resp_content_type("text/plain")
+    |> send_resp(200, WhoWasThere.License.text())
+  end
+
   defp base_url(conn) do
     port =
       cond do

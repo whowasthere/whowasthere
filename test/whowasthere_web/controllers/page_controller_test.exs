@@ -19,5 +19,12 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ "http://localhost:4000"
     assert html =~ "curl -s #{host}/new"
     refute html =~ "Then open #{host}"
+    assert html =~ ~s(href="LICENSE")
+  end
+
+  test "GET /LICENSE", %{conn: conn} do
+    conn = get(conn, ~p"/LICENSE")
+    body = text_response(conn, 200)
+    assert body =~ "GNU AFFERO GENERAL PUBLIC LICENSE"
   end
 end
