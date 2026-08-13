@@ -10,6 +10,12 @@ defmodule WhoWasThereWeb.Router do
     plug :put_secure_browser_headers
   end
 
+  pipeline :site do
+    plug :accepts, ["html", "json"]
+    plug :fetch_session
+    plug :put_secure_browser_headers
+  end
+
   pipeline :ingest do
     plug WhoWasThereWeb.Plugs.CORS
   end
@@ -31,10 +37,15 @@ defmodule WhoWasThereWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/d/:token", DashLive
+  end
+
+  scope "/", WhoWasThereWeb do
+    pipe_through :site
+
     get "/new", SiteController, :create
     get "/pay", SiteController, :pay
     get "/renew", SiteController, :renew
     get "/notify", SiteController, :notify
-    live "/d/:token", DashLive
   end
 end

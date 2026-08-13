@@ -25,6 +25,17 @@ defmodule WhoWasThereWeb.IngestControllerTest do
     assert Store.get_site(body["site"]) == nil
   end
 
+  test "GET /new accepts application/json", %{conn: conn} do
+    conn =
+      conn
+      |> put_req_header("accept", "application/json")
+      |> get(~p"/new")
+
+    body = json_response(conn, 200)
+    assert body["snippet"]
+    assert body["dash"]
+  end
+
   test "GET /new?id= custom", %{conn: conn} do
     conn = get(conn, ~p"/new?id=my-blog-01")
     assert text_response(conn, 200) =~ "my-blog-01"

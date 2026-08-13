@@ -6,7 +6,7 @@ There are no accounts. You create a site with one HTTP request, put a script on 
 
 The tracker is about 2 KB and sets no cookies. SQLite keeps only daily aggregates.
 
-**Hosted cloud:** [whowasthere.fyi](https://whowasthere.fyi) — create a site there, no install. **Self-host:** Elixir or Docker on your machine; see [Self-host](#self-host). Do not mix the two: `mix phx.server` serves `http://localhost:4000`, not the public cloud.
+**Hosted cloud:** [whowasthere.fyi](https://whowasthere.fyi). **Self-host:** [Self-host](#self-host).
 
 ## Create a site
 
@@ -196,8 +196,6 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 ## Self-host
 
-This section is only for running **your own** copy. It talks to `localhost` (or whatever origin you bind). The hosted cloud is [whowasthere.fyi](https://whowasthere.fyi); `mix phx.server` does not start that site.
-
 You need Elixir 1.17 or newer (1.20 / OTP 29 is what we test on). Mix is enough; SQLite is embedded.
 
 ```bash
@@ -205,11 +203,12 @@ mix setup
 mix phx.server
 ```
 
-Then open [http://localhost:4000](http://localhost:4000). Create a site with `curl -s http://localhost:4000/new` — that key and dashboard belong to your process, not to the public cloud.
+Then open [http://localhost:4000](http://localhost:4000).
 
 ```bash
-mix test          # tests
-mix ecto.reset    # wipe and recreate the database
+curl -s http://localhost:4000/new
+mix test
+mix ecto.reset
 ```
 
 In development the database file is `config/whowasthere_dev.db`.
@@ -225,6 +224,7 @@ In development the database file is `config/whowasthere_dev.db`.
 | `PORT` | listen port, default `4000` |
 | `POOL_SIZE` | SQLite pool, default `5` |
 | `PAY_WALLET` | Solana address that receives USDC |
+| `PAY_BYPASS_TXID` | optional; this string is a valid paid `txid` without Solana RPC. Reusable. |
 | `SOLANA_RPC` | optional RPC URL (default public mainnet) |
 | `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
 
@@ -238,6 +238,14 @@ docker run --rm -p 4000:4000 \
 ```
 
 Or use the included `compose.yml`. Behind TLS, send `X-Forwarded-Proto`. `/health` is excluded from the HTTPS redirect. Releases run migrations on boot.
+
+`PAY_BYPASS_TXID` is accepted as `txid` on `/new` and as `to` on `/renew`. Chain lookup is skipped, and the same value can be reused:
+
+```bash
+export PAY_BYPASS_TXID=dev-paid
+curl -s 'http://localhost:4000/new?txid=dev-paid'
+curl -s 'http://localhost:4000/renew?from=OLD_PAY&to=dev-paid'
+```
 
 ## License
 
