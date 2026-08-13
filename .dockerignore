@@ -1,0 +1,21 @@
+# Local compose overrides and tooling
+.dockerignore
+.git
+.github
+.vscode
+.cursor
+*_dev.db*
+*_test.db*
+*.db
+*.db-*
+_build
+deps
+doc
+cover
+tmp
+assets/node_modules
+test
+AGENTS.md
+.env
+.env.*
+!.env.example

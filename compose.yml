@@ -1,0 +1,41 @@
+# Production stack on 204.168.206.92 (Traefik network `edge`).
+# Image is built in GitHub Actions and published to GHCR.
+# Run: IMAGE_TAG=latest docker compose up -d
+
+services:
+  app:
+    image: ghcr.io/whowasthere/whowasthere:${IMAGE_TAG:-latest}
+    container_name: whowasthere
+    restart: unless-stopped
+    user: "1000:1000"
+    env_file:
+      - .env
+    environment:
+      PHX_SERVER: "true"
+      PHX_HOST: ${DOMAIN:-whowasthere.fyi}
+      PORT: "4000"
+      DATABASE_PATH: /data/whowasthere.db
+    volumes:
+      - ./data:/data
+    networks:
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=edge"
+      - "traefik.http.routers.whowasthere.rule=Host(`${DOMAIN:-whowasthere.fyi}`)"
+      - "traefik.http.routers.whowasthere.entrypoints=websecure"
+      - "traefik.http.routers.whowasthere.tls=true"
+      - "traefik.http.routers.whowasthere.tls.certresolver=le"
+      - "traefik.http.services.whowasthere.loadbalancer.server.port=4000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -q -O- http://127.0.0.1:4000/health | grep -q '\"ok\":true'"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  edge:
+    external: true

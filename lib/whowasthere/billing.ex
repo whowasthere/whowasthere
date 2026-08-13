@@ -1,0 +1,525 @@
+defmodule WhoWasThere.Billing do
+  @moduledoc """
+  Trials, paid USDC years, shared monthly pageview quota, and renewals.
+
+  Hot path (allow / record pageviews) uses ETS. SQLite is only touched on
+  create, renew, email changes, and periodic flush.
+  """
+  import Ecto.Query
+
+  alias WhoWasThere.{ID, Mailer, Repo}
+  alias WhoWasThere.Billing.Solana
+  alias WhoWasThere.Store.Payment
+
+  @table :wwt_pay
+  @trial_days 7
+  @paid_days 365
+  @month_cap 500_000
+  @price_usdc 30
+  @email_re ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/i
+
+  def month_cap, do: @month_cap
+  def price_usdc, do: @price_usdc
+  def trial_days, do: @trial_days
+  def wallet, do: Application.get_env(:whowasthere, :pay_wallet)
+  def usdc_mint, do: Application.get_env(:whowasthere, :usdc_mint)
+
+  def ensure_table do
+    if :ets.whereis(@table) == :undefined do
+      :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    end
+
+    :ok
+  end
+
+  def reset_cache do
+    ensure_table()
+    :ets.delete_all_objects(@table)
+    :ok
+  end
+
+  def warm_cache do
+    ensure_table()
+
+    for pay <- Repo.all(Payment) do
+      cache_put(pay)
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  def flush_dirty do
+    ensure_table()
+
+    for {id, meta} <- :ets.tab2list(@table), meta[:dirty] do
+      case Repo.get(Payment, id) do
+        nil ->
+          :ok
+
+        pay ->
+          pay
+          |> Ecto.Changeset.change(%{
+            hits_month: meta.hits_month,
+            month: meta.month,
+            notices: meta.notices || pay.notices
+          })
+          |> Repo.update!()
+
+          cache_put(%{meta | dirty: false, id: id})
+      end
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  def info do
+    %{
+      wallet: wallet(),
+      mint: usdc_mint(),
+      amount_usdc: @price_usdc,
+      month_cap: @month_cap,
+      trial_days: @trial_days,
+      paid_days: @paid_days,
+      network: Application.get_env(:whowasthere, :solana_network, "mainnet-beta")
+    }
+  end
+
+  def get(id) when is_binary(id), do: Repo.get(Payment, id)
+  def get(_), do: nil
+
+  def get_by_txid(txid) when is_binary(txid), do: Repo.get_by(Payment, txid: txid)
+  def get_by_txid(_), do: nil
+
+  def status(nil), do: nil
+
+  def status(%Payment{} = pay) do
+    meta = cached(pay.id) || cache_put(pay)
+    status_from_meta(meta)
+  end
+
+  def status(id) when is_binary(id) do
+    case cached(id) || load_cache(id) do
+      nil -> nil
+      meta -> status_from_meta(meta)
+    end
+  end
+
+  def open_trial(email \\ nil) do
+    with {:ok, email} <- normalize_email(email) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      pay = %Payment{
+        id: "t_" <> ID.generate_token(),
+        kind: "trial",
+        txid: nil,
+        email: email,
+        expires_at: DateTime.add(now, @trial_days * 86_400, :second),
+        month: month_key(now),
+        hits_month: 0,
+        notices: "",
+        created_at: now
+      }
+
+      inserted = Repo.insert!(pay)
+      cache_put(inserted)
+      {:ok, inserted}
+    end
+  end
+
+  def open_paid(txid, email \\ nil) do
+    with {:ok, email} <- normalize_email(email),
+         {:ok, txid} <- normalize_txid(txid),
+         :ok <- ensure_fresh_txid(txid),
+         :ok <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      pay = %Payment{
+        id: txid,
+        kind: "paid",
+        txid: txid,
+        email: email,
+        expires_at: DateTime.add(now, @paid_days * 86_400, :second),
+        month: month_key(now),
+        hits_month: 0,
+        notices: "",
+        created_at: now
+      }
+
+      inserted = Repo.insert!(pay)
+      cache_put(inserted)
+      {:ok, inserted}
+    end
+  end
+
+  def start_for_new(txid, email) do
+    cond do
+      blank?(txid) ->
+        open_trial(email)
+
+      true ->
+        case get_by_txid(String.trim(txid)) do
+          %Payment{} = pay ->
+            with {:ok, email} <- normalize_email(email) do
+              {:ok, maybe_set_email(pay, email)}
+            end
+
+          nil ->
+            open_paid(txid, email)
+        end
+    end
+  end
+
+  def renew(from_id, to_txid, email \\ nil) do
+    with {:ok, email} <- normalize_email(email),
+         {:ok, to_txid} <- normalize_txid(to_txid),
+         %Payment{} = from <- get(from_id) || get_by_txid(from_id),
+         :ok <- ensure_fresh_txid(to_txid),
+         :ok <- Solana.verify_usdc_payment(to_txid, wallet(), @price_usdc) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      from_meta = cached(from.id) || cache_put(from)
+      base = if DateTime.compare(from.expires_at, now) == :gt, do: from.expires_at, else: now
+
+      new = %Payment{
+        id: to_txid,
+        kind: "paid",
+        txid: to_txid,
+        email: email || from.email,
+        expires_at: DateTime.add(base, @paid_days * 86_400, :second),
+        month: from_meta.month,
+        hits_month: from_meta.hits_month,
+        notices: "",
+        created_at: now
+      }
+
+      {:ok, inserted} =
+        Repo.transaction(fn ->
+          inserted = Repo.insert!(new)
+
+          from(s in WhoWasThere.Store.Site, where: s.payment_id == ^from.id)
+          |> Repo.update_all(set: [payment_id: inserted.id])
+
+          inserted
+        end)
+
+      cache_put(inserted)
+      :ets.delete(@table, from.id)
+      {:ok, inserted}
+    else
+      nil -> {:error, :unknown_payment}
+      other -> other
+    end
+  end
+
+  def set_email(payment_id, email) do
+    with {:ok, email} <- normalize_email(email),
+         %Payment{} = pay <- get(payment_id) || get_by_txid(payment_id) do
+      if is_nil(email) do
+        {:error, :email_required}
+      else
+        updated = pay |> Ecto.Changeset.change(%{email: email}) |> Repo.update!()
+        cache_put(updated)
+        {:ok, updated}
+      end
+    else
+      nil -> {:error, :unknown_payment}
+      other -> other
+    end
+  end
+
+  def allow_pageview?(payment_id) when is_binary(payment_id) do
+    case ensure_meta(payment_id) do
+      nil -> false
+      meta -> active?(meta) and meta.hits_month < @month_cap
+    end
+  end
+
+  def allow_pageview?(_), do: false
+
+  def allow_traffic?(payment_id) when is_binary(payment_id) do
+    case ensure_meta(payment_id) do
+      nil -> false
+      meta -> active?(meta)
+    end
+  end
+
+  def allow_traffic?(_), do: false
+
+  def record_pageview(payment_id) when is_binary(payment_id) do
+    case ensure_meta(payment_id) do
+      nil ->
+        :ok
+
+      meta ->
+        if active?(meta) and meta.hits_month < @month_cap do
+          updated = %{meta | hits_month: meta.hits_month + 1, dirty: true}
+          cache_put(updated)
+          maybe_quota_mail(updated)
+        end
+
+        :ok
+    end
+  end
+
+  def record_pageview(_), do: :ok
+
+  def tick_notices do
+    ensure_table()
+    now = DateTime.utc_now()
+
+    for {id, _} <- :ets.tab2list(@table) do
+      case ensure_meta(id) do
+        nil -> :ok
+        meta -> maybe_expiry_mail(meta, now)
+      end
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  defp status_from_meta(meta) do
+    now = DateTime.utc_now()
+    expired? = not active?(meta)
+    left = max(@month_cap - meta.hits_month, 0)
+
+    %{
+      id: meta.id,
+      kind: meta.kind,
+      txid: meta.txid,
+      email: meta.email,
+      expires_at: meta.expires_at,
+      expired?: expired?,
+      days_left: days_left(meta.expires_at, now),
+      month: meta.month,
+      hits_month: meta.hits_month,
+      month_cap: @month_cap,
+      hits_left: left,
+      over_quota?: meta.hits_month >= @month_cap
+    }
+  end
+
+  defp ensure_meta(id) do
+    case cached(id) do
+      nil -> load_cache(id)
+      meta -> roll_month_meta(meta)
+    end
+  end
+
+  defp load_cache(id) do
+    case get(id) do
+      nil -> nil
+      pay -> cache_put(pay)
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp cached(id) do
+    ensure_table()
+
+    case :ets.lookup(@table, id) do
+      [{^id, meta}] -> roll_month_meta(meta)
+      [] -> nil
+    end
+  end
+
+  defp cache_put(%Payment{} = pay) do
+    meta = %{
+      id: pay.id,
+      kind: pay.kind,
+      txid: pay.txid,
+      email: pay.email,
+      expires_at: pay.expires_at,
+      month: pay.month,
+      hits_month: pay.hits_month,
+      notices: pay.notices || "",
+      dirty: false
+    }
+
+    cache_put(meta)
+  end
+
+  defp cache_put(%{id: id} = meta) do
+    ensure_table()
+    :ets.insert(@table, {id, meta})
+    meta
+  end
+
+  defp roll_month_meta(meta) do
+    current = month_key(DateTime.utc_now())
+
+    if meta.month == current do
+      meta
+    else
+      updated = %{
+        meta
+        | month: current,
+          hits_month: 0,
+          notices: drop_quota_notices(meta.notices),
+          dirty: true
+      }
+
+      cache_put(updated)
+    end
+  end
+
+  defp maybe_expiry_mail(%{email: nil}, _), do: :ok
+  defp maybe_expiry_mail(%{email: ""}, _), do: :ok
+
+  defp maybe_expiry_mail(meta, now) do
+    days = days_left(meta.expires_at, now)
+
+    cond do
+      days < 0 and not noticed?(meta, "expired") ->
+        Mailer.send(meta.email, "Who Was There expired", expiry_body(meta, :expired))
+        notice(meta, "expired")
+
+      meta.kind == "trial" and days in 0..2 and not noticed?(meta, "trial_soon") ->
+        Mailer.send(meta.email, "Who Was There trial ends soon", expiry_body(meta, :trial_soon))
+        notice(meta, "trial_soon")
+
+      meta.kind == "paid" and days in 0..14 and not noticed?(meta, "year_soon") ->
+        Mailer.send(meta.email, "Who Was There renews soon", expiry_body(meta, :year_soon))
+        notice(meta, "year_soon")
+
+      true ->
+        :ok
+    end
+  end
+
+  defp maybe_quota_mail(%{email: email} = meta) when email in [nil, ""], do: meta
+
+  defp maybe_quota_mail(meta) do
+    cond do
+      meta.hits_month >= @month_cap and not noticed?(meta, "quota_full") ->
+        Mailer.send(meta.email, "Who Was There monthly cap reached", quota_body(meta, :full))
+        notice(meta, "quota_full")
+
+      meta.hits_month >= div(@month_cap * 4, 5) and not noticed?(meta, "quota_80") ->
+        Mailer.send(meta.email, "Who Was There at 80% of monthly cap", quota_body(meta, :warn))
+        notice(meta, "quota_80")
+
+      true ->
+        meta
+    end
+  end
+
+  defp expiry_body(meta, kind) do
+    pay_info = info()
+
+    """
+    who was there
+
+    payment  #{meta.id}
+    plan     #{meta.kind}
+    expires  #{DateTime.to_iso8601(meta.expires_at)}
+
+    #{case kind do
+      :trial_soon -> "Your 7-day trial ends soon. Send #{@price_usdc} USDC on Solana, then renew."
+      :year_soon -> "Your paid year ends soon. Send #{@price_usdc} USDC on Solana, then renew."
+      :expired -> "This plan has expired. Hits are dropped until you renew."
+    end}
+
+    wallet   #{pay_info.wallet}
+    renew    curl -s 'https://YOUR_HOST/renew?from=#{meta.id}&to=TXID&email=#{meta.email || ""}'
+    """
+  end
+
+  defp quota_body(meta, kind) do
+    """
+    who was there
+
+    payment  #{meta.id}
+    month    #{meta.month}
+    hits     #{meta.hits_month} / #{@month_cap}
+
+    #{if kind == :full, do: "The monthly pageview cap is reached. Further pageviews are dropped until next month.", else: "You are at about 80% of the monthly pageview cap."}
+    """
+  end
+
+  defp noticed?(meta, tag) do
+    meta.notices |> to_string() |> String.split(",", trim: true) |> Enum.member?(tag)
+  end
+
+  defp notice(meta, tag) do
+    tags =
+      (meta.notices || "")
+      |> String.split(",", trim: true)
+      |> Kernel.++([tag])
+      |> Enum.uniq()
+      |> Enum.join(",")
+
+    cache_put(%{meta | notices: tags, dirty: true})
+  end
+
+  defp drop_quota_notices(notices) do
+    notices
+    |> to_string()
+    |> String.split(",", trim: true)
+    |> Enum.reject(&(&1 in ["quota_80", "quota_full"]))
+    |> Enum.join(",")
+  end
+
+  defp active?(meta) do
+    DateTime.compare(meta.expires_at, DateTime.utc_now()) == :gt
+  end
+
+  defp days_left(expires_at, now) do
+    secs = DateTime.diff(expires_at, now, :second)
+    if secs < 0, do: -1, else: div(secs, 86_400)
+  end
+
+  defp month_key(%DateTime{} = dt) do
+    "#{dt.year}-#{dt.month |> Integer.to_string() |> String.pad_leading(2, "0")}"
+  end
+
+  defp maybe_set_email(pay, nil), do: pay
+
+  defp maybe_set_email(pay, email) do
+    if pay.email in [nil, ""] do
+      updated = pay |> Ecto.Changeset.change(%{email: email}) |> Repo.update!()
+      cache_put(updated)
+      updated
+    else
+      cache_put(pay)
+      pay
+    end
+  end
+
+  defp ensure_fresh_txid(txid) do
+    if get_by_txid(txid), do: {:error, :txid_used}, else: :ok
+  end
+
+  defp normalize_txid(nil), do: {:error, :txid_required}
+  defp normalize_txid(""), do: {:error, :txid_required}
+
+  defp normalize_txid(txid) do
+    txid = String.trim(txid)
+
+    if String.length(txid) in 64..128 and txid =~ ~r/^[1-9A-HJ-NP-Za-km-z]+$/ do
+      {:ok, txid}
+    else
+      {:error, :bad_txid}
+    end
+  end
+
+  defp normalize_email(nil), do: {:ok, nil}
+  defp normalize_email(""), do: {:ok, nil}
+
+  defp normalize_email(email) do
+    email = email |> to_string() |> String.trim() |> String.downcase() |> String.slice(0, 160)
+
+    if email =~ @email_re do
+      {:ok, email}
+    else
+      {:error, :bad_email}
+    end
+  end
+
+  defp blank?(v), do: v in [nil, ""]
+end
