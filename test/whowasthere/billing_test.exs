@@ -45,6 +45,13 @@ defmodule WhoWasThere.BillingTest do
       assert {:ok, pay} = Billing.open_paid(bypass, "ops@example.com")
       assert pay.id == bypass
       assert pay.kind == "paid"
+
+      assert {:ok, again} = Billing.open_paid(bypass, "ops@example.com")
+      assert again.id == pay.id
+
+      assert {:ok, trial} = Billing.open_trial(nil)
+      assert {:ok, renewed} = Billing.renew(trial.id, bypass, "ops@example.com")
+      assert renewed.id == bypass
     after
       Application.put_env(:whowasthere, :pay_bypass_txid, previous)
       Application.put_env(:whowasthere, :solana_verify, previous_verify)

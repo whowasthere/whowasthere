@@ -133,25 +133,16 @@ defmodule WhoWasThere.Billing do
   def open_paid(txid, email \\ nil) do
     with {:ok, email} <- normalize_email(email),
          {:ok, txid} <- normalize_txid(txid),
-         :ok <- ensure_fresh_txid(txid),
          :ok <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
-      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      cond do
+        existing = bypass_txid?(txid) && (get(txid) || get_by_txid(txid)) ->
+          {:ok, refresh_paid(existing, email)}
 
-      pay = %Payment{
-        id: txid,
-        kind: "paid",
-        txid: txid,
-        email: email,
-        expires_at: DateTime.add(now, @paid_days * 86_400, :second),
-        month: month_key(now),
-        hits_month: 0,
-        notices: "",
-        created_at: now
-      }
-
-      inserted = Repo.insert!(pay)
-      cache_put(inserted)
-      {:ok, inserted}
+        true ->
+          with :ok <- ensure_fresh_txid(txid) do
+            insert_paid(txid, email)
+          end
+      end
     end
   end
 
@@ -161,10 +152,17 @@ defmodule WhoWasThere.Billing do
         open_trial(email)
 
       true ->
-        case get_by_txid(String.trim(txid)) do
+        case get_by_txid(String.trim(txid)) || get(String.trim(txid)) do
           %Payment{} = pay ->
             with {:ok, email} <- normalize_email(email) do
-              {:ok, maybe_set_email(pay, email)}
+              pay =
+                if bypass_txid?(pay.id) or (is_binary(pay.txid) and bypass_txid?(pay.txid)) do
+                  refresh_paid(pay, email)
+                else
+                  maybe_set_email(pay, email)
+                end
+
+              {:ok, pay}
             end
 
           nil ->
@@ -177,41 +175,124 @@ defmodule WhoWasThere.Billing do
     with {:ok, email} <- normalize_email(email),
          {:ok, to_txid} <- normalize_txid(to_txid),
          %Payment{} = from <- get(from_id) || get_by_txid(from_id),
-         :ok <- ensure_fresh_txid(to_txid),
          :ok <- Solana.verify_usdc_payment(to_txid, wallet(), @price_usdc) do
-      now = DateTime.utc_now() |> DateTime.truncate(:second)
-      from_meta = cached(from.id) || cache_put(from)
-      base = if DateTime.compare(from.expires_at, now) == :gt, do: from.expires_at, else: now
+      cond do
+        bypass_txid?(to_txid) ->
+          renew_bypass(from, to_txid, email)
 
-      new = %Payment{
-        id: to_txid,
-        kind: "paid",
-        txid: to_txid,
-        email: email || from.email,
-        expires_at: DateTime.add(base, @paid_days * 86_400, :second),
-        month: from_meta.month,
-        hits_month: from_meta.hits_month,
-        notices: "",
-        created_at: now
-      }
-
-      {:ok, inserted} =
-        Repo.transaction(fn ->
-          inserted = Repo.insert!(new)
-
-          from(s in WhoWasThere.Store.Site, where: s.payment_id == ^from.id)
-          |> Repo.update_all(set: [payment_id: inserted.id])
-
-          inserted
-        end)
-
-      cache_put(inserted)
-      :ets.delete(@table, from.id)
-      {:ok, inserted}
+        true ->
+          with :ok <- ensure_fresh_txid(to_txid) do
+            insert_renewal(from, to_txid, email)
+          end
+      end
     else
       nil -> {:error, :unknown_payment}
       other -> other
     end
+  end
+
+  defp renew_bypass(from, to_txid, email) do
+    case get(to_txid) || get_by_txid(to_txid) do
+      %Payment{} = existing ->
+        updated = refresh_paid(existing, email || from.email || existing.email)
+        reattach_sites(from.id, updated.id)
+        if from.id != updated.id, do: :ets.delete(@table, from.id)
+        {:ok, updated}
+
+      nil ->
+        insert_renewal(from, to_txid, email)
+    end
+  end
+
+  defp insert_paid(txid, email) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    pay = %Payment{
+      id: txid,
+      kind: "paid",
+      txid: txid,
+      email: email,
+      expires_at: DateTime.add(now, @paid_days * 86_400, :second),
+      month: month_key(now),
+      hits_month: 0,
+      notices: "",
+      created_at: now
+    }
+
+    inserted = Repo.insert!(pay)
+    cache_put(inserted)
+    {:ok, inserted}
+  end
+
+  defp insert_renewal(from, to_txid, email) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    from_meta = cached(from.id) || cache_put(from)
+    base = if DateTime.compare(from.expires_at, now) == :gt, do: from.expires_at, else: now
+
+    new = %Payment{
+      id: to_txid,
+      kind: "paid",
+      txid: to_txid,
+      email: email || from.email,
+      expires_at: DateTime.add(base, @paid_days * 86_400, :second),
+      month: from_meta.month,
+      hits_month: from_meta.hits_month,
+      notices: "",
+      created_at: now
+    }
+
+    {:ok, inserted} =
+      Repo.transaction(fn ->
+        inserted = Repo.insert!(new)
+        reattach_sites(from.id, inserted.id)
+        inserted
+      end)
+
+    cache_put(inserted)
+    :ets.delete(@table, from.id)
+    {:ok, inserted}
+  end
+
+  defp refresh_paid(%Payment{} = pay, email) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    base = if DateTime.compare(pay.expires_at, now) == :gt, do: pay.expires_at, else: now
+
+    changes = %{
+      kind: "paid",
+      expires_at: DateTime.add(base, @paid_days * 86_400, :second),
+      notices: drop_expiry_notices(pay.notices)
+    }
+
+    changes =
+      cond do
+        bypass_txid?(pay.id) and is_binary(email) and email != "" ->
+          Map.put(changes, :email, email)
+
+        pay.email in [nil, ""] and is_binary(email) and email != "" ->
+          Map.put(changes, :email, email)
+
+        true ->
+          changes
+      end
+
+    updated = pay |> Ecto.Changeset.change(changes) |> Repo.update!()
+    cache_put(updated)
+    updated
+  end
+
+  defp reattach_sites(from_id, to_id) when from_id == to_id, do: {0, nil}
+
+  defp reattach_sites(from_id, to_id) do
+    from(s in WhoWasThere.Store.Site, where: s.payment_id == ^from_id)
+    |> Repo.update_all(set: [payment_id: to_id])
+  end
+
+  defp drop_expiry_notices(notices) do
+    notices
+    |> to_string()
+    |> String.split(",", trim: true)
+    |> Enum.reject(&(&1 in ["expired", "trial_soon", "year_soon"]))
+    |> Enum.join(",")
   end
 
   def set_email(payment_id, email) do
