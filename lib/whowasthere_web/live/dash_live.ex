@@ -69,13 +69,21 @@ defmodule WhoWasThereWeb.DashLive do
 
     # The host is only known once it is locked: from `?host=` on /new, or from the first hit.
     host = report.host || socket.assigns.host
-    billing = Billing.status(socket.assigns[:payment_id])
+
+    payment_id =
+      case Collector.site(socket.assigns.id) do
+        %{payment_id: pay} when is_binary(pay) -> pay
+        _ -> socket.assigns[:payment_id]
+      end
+
+    billing = Billing.status(payment_id)
 
     assign(socket,
       report: report,
       host: host,
       page_title: host || socket.assigns.id,
       max_bar: max_bar,
+      payment_id: payment_id,
       billing: billing,
       dim_titles: @dim_titles,
       ranges: @ranges

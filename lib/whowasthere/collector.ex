@@ -79,6 +79,13 @@ defmodule WhoWasThere.Collector do
 
   def flush, do: GenServer.call(__MODULE__, :flush)
 
+  def reattach_payment(from_id, to_id)
+      when is_binary(from_id) and is_binary(to_id) do
+    GenServer.call(__MODULE__, {:reattach_payment, from_id, to_id})
+  end
+
+  def reattach_payment(_, _), do: :ok
+
   def reset! do
     if Process.whereis(__MODULE__), do: GenServer.call(__MODULE__, :reset)
     :ok
@@ -160,6 +167,27 @@ defmodule WhoWasThere.Collector do
     state = maybe_roll(state)
     persist_dirty(state.day)
     Billing.flush_dirty()
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:reattach_payment, from_id, to_id}, _from, state) do
+    :ets.foldl(
+      fn
+        {id, meta}, :ok ->
+          if meta[:payment_id] == from_id do
+            :ets.insert(:wwt_sites, {id, %{meta | payment_id: to_id}})
+            :ets.insert(:wwt_dirty, {id, state.day})
+          end
+
+          :ok
+
+        _, acc ->
+          acc
+      end,
+      :ok,
+      :wwt_sites
+    )
+
     {:reply, :ok, state}
   end
 
@@ -608,9 +636,12 @@ defmodule WhoWasThere.Collector do
     end
   end
 
+  # After /renew the snippet still carries the old payment id. Billing follows the
+  # site's current payment_id; a signed key only needs a matching nonce.
   defp payment_ok(%{payment_id: nil}, _), do: :ok
   defp payment_ok(%{payment_id: p}, p), do: :ok
-  defp payment_ok(%{payment_id: _}, nil), do: :ok
+  defp payment_ok(%{payment_id: p}, _) when is_binary(p), do: :ok
+  defp payment_ok(_, nil), do: :ok
   defp payment_ok(_, _), do: :drop
 
   defp resolve_dash(%{id: id, nonce: nonce, host: host} = claims, token) do
@@ -624,12 +655,34 @@ defmodule WhoWasThere.Collector do
         nil
 
       meta ->
+        # Prefer the live billing pointer (updated by /renew), not the stamped trial id.
+        meta = reconcile_payment(id, meta)
+        current = meta.payment_id || payment_id
+
         meta
         |> Map.put(:id, id)
         |> Map.put(:token, token)
         |> Map.put(:host, meta.host || host)
-        |> Map.put(:payment_id, meta.payment_id || payment_id)
+        |> Map.put(:payment_id, current)
     end
+  end
+
+  defp reconcile_payment(id, meta) do
+    case Store.get_site(id) do
+      %{payment_id: pay} when is_binary(pay) ->
+        if pay != Map.get(meta, :payment_id) do
+          updated = %{meta | payment_id: pay}
+          :ets.insert(:wwt_sites, {id, updated})
+          updated
+        else
+          meta
+        end
+
+      _ ->
+        meta
+    end
+  rescue
+    _ -> meta
   end
 
   defp legacy_token(token) do

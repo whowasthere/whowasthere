@@ -283,8 +283,12 @@ defmodule WhoWasThere.Billing do
   defp reattach_sites(from_id, to_id) when from_id == to_id, do: {0, nil}
 
   defp reattach_sites(from_id, to_id) do
-    from(s in WhoWasThere.Store.Site, where: s.payment_id == ^from_id)
-    |> Repo.update_all(set: [payment_id: to_id])
+    result =
+      from(s in WhoWasThere.Store.Site, where: s.payment_id == ^from_id)
+      |> Repo.update_all(set: [payment_id: to_id])
+
+    WhoWasThere.Collector.reattach_payment(from_id, to_id)
+    result
   end
 
   defp drop_expiry_notices(notices) do
