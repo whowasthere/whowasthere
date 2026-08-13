@@ -172,7 +172,7 @@ defmodule WhoWasThereWeb.SiteController do
     mint     #{p.mint}
     amount   #{p.amount_usdc} USDC / year
     network  #{p.network}
-    cap      #{p.month_cap} pageviews / month across all sites
+    cap      #{p.month_cap} pageviews / month (+#{p.month_cap} per extra #{p.amount_usdc} USDC)
     trial    #{p.trial_days} days free
 
     new      curl -s '#{p.new}'

@@ -1,6 +1,8 @@
 defmodule WhoWasThereWeb.DashLive do
   use WhoWasThereWeb, :live_view
 
+  import WhoWasThereWeb.Charts
+
   alias WhoWasThere.{Analytics, Billing, Collector, Format}
 
   @ranges [{:today, "today"}, {:d7, "7d"}, {:d30, "30d"}, {:d90, "90d"}]
@@ -13,11 +15,6 @@ defmodule WhoWasThereWeb.DashLive do
     {"src", "UTM / source"},
     {"medium", "UTM / medium"},
     {"campaign", "UTM / campaign"},
-    {"country", "Countries"},
-    {"device", "Devices"},
-    {"width", "Viewport"},
-    {"browser", "Browsers"},
-    {"os", "OS"},
     {"lang", "Languages"},
     {"click", "Clicks"},
     {"event", "Events"}
@@ -65,7 +62,8 @@ defmodule WhoWasThereWeb.DashLive do
 
   defp load(socket) do
     report = Analytics.report(socket.assigns.id, socket.assigns.range)
-    max_bar = report.hours |> Enum.map(& &1.pageviews) |> Enum.max(fn -> 0 end)
+    traffic = traffic_points(report)
+    peak = traffic |> Enum.map(& &1.value) |> Enum.max(fn -> 0 end)
 
     # The host is only known once it is locked: from `?host=` on /new, or from the first hit.
     host = report.host || socket.assigns.host
@@ -83,7 +81,9 @@ defmodule WhoWasThereWeb.DashLive do
       report: report,
       host: host,
       page_title: host || socket.assigns.id,
-      max_bar: max_bar,
+      traffic: traffic,
+      peak: peak,
+      session_slices: session_slices(report),
       payment_id: payment_id,
       billing: billing,
       dim_titles: @dim_titles,
@@ -199,30 +199,47 @@ defmodule WhoWasThereWeb.DashLive do
           <.stat label="avg. time" value={Format.duration(@report.avg_ms)} hint="per session" />
         </section>
 
-        <section class="panel p-5">
-          <div class="mb-5 flex items-baseline justify-between gap-4">
-            <h2 class="eyebrow">
-              {if @range == :today, do: "by hour · utc", else: "by day"}
-            </h2>
-            <span class="num text-[11px] text-base-content/40">peak {@max_bar}</span>
-          </div>
+        <.area_chart
+          id="traffic-chart"
+          title={if @range == :today, do: "Traffic · by hour UTC", else: "Traffic · by day"}
+          hint={if @range == :today, do: "pageviews each hour", else: "pageviews and uniques"}
+          points={@traffic}
+          peak={@peak}
+        />
 
-          <div class="chart flex h-36 items-end gap-[3px]">
-            <div :for={bar <- @report.hours} class="col">
-              <span class="col-tip">{tip(bar)}</span>
-              <div
-                :if={bar.pageviews > 0}
-                class="col-fill"
-                style={"height: #{bar_pct(bar.pageviews, @max_bar)}%"}
-              />
-              <div :if={bar.pageviews == 0} class="col-empty" />
-            </div>
-          </div>
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <.donut_chart
+            id="chart-devices"
+            title="Devices"
+            rows={@report.dims["device"] || []}
+          />
+          <.donut_chart
+            id="chart-browsers"
+            title="Browsers"
+            rows={@report.dims["browser"] || []}
+          />
+          <.donut_chart id="chart-os" title="OS" rows={@report.dims["os"] || []} />
+          <.donut_chart
+            id="chart-sessions"
+            title="Sessions"
+            unit="sessions"
+            rows={@session_slices}
+          />
+        </section>
 
-          <div class="mt-3 flex justify-between">
-            <span class="num text-[10px] text-base-content/30">{axis_start(@report)}</span>
-            <span class="num text-[10px] text-base-content/30">{axis_end(@report)}</span>
-          </div>
+        <section class="grid gap-4 lg:grid-cols-2">
+          <.bar_chart
+            id="chart-countries"
+            title="Countries"
+            hint="top 10 by pageviews"
+            rows={@report.dims["country"] || []}
+          />
+          <.bar_chart
+            id="chart-viewport"
+            title="Viewport"
+            hint="css width buckets"
+            rows={@report.dims["width"] || []}
+          />
         </section>
 
         <section class="grid gap-4 lg:grid-cols-2">
@@ -317,25 +334,24 @@ defmodule WhoWasThereWeb.DashLive do
   defp bar_pct(0, _), do: 0
   defp bar_pct(n, max), do: max(2, round(n / max * 100))
 
-  defp tip(%{hour: hour, pageviews: views}) when is_integer(hour) do
-    "#{pad(hour)}:00 · #{views}"
+  defp traffic_points(%{range: :today, hours: hours}) do
+    Enum.map(hours, fn %{hour: hour, pageviews: views} ->
+      %{label: pad(hour) <> ":00", value: views, secondary: nil}
+    end)
   end
 
-  defp tip(%{hour: label, pageviews: views}), do: "#{label} · #{views}"
-
-  defp axis_start(%{hours: [%{hour: hour} | _]}) when is_integer(hour), do: "00:00"
-  defp axis_start(%{hours: [%{hour: label} | _]}), do: label
-  defp axis_start(_), do: ""
-
-  defp axis_end(%{hours: []}), do: ""
-
-  defp axis_end(%{hours: hours}) do
-    case List.last(hours) do
-      %{hour: hour} when is_integer(hour) -> "23:59"
-      %{hour: label} -> label
-      _ -> ""
-    end
+  defp traffic_points(%{series: series}) do
+    Enum.map(series, fn row ->
+      %{label: Date.to_iso8601(row.day), value: row.pageviews, secondary: row.uniques}
+    end)
   end
+
+  defp session_slices(%{sessions: sessions, bounces: bounces}) when sessions > 0 do
+    engaged = max(sessions - bounces, 0)
+    [%{key: "engaged", pageviews: engaged}, %{key: "bounced", pageviews: bounces}]
+  end
+
+  defp session_slices(_), do: []
 
   defp pad(n), do: n |> Integer.to_string() |> String.pad_leading(2, "0")
 

@@ -17,6 +17,7 @@ defmodule WhoWasThere.BillingTest do
     assert status.kind == "trial"
     assert status.email == "you@example.com"
     assert status.days_left in 6..7
+    assert status.month_cap == Billing.month_cap()
     assert Billing.allow_pageview?(pay.id)
   end
 
@@ -40,6 +41,7 @@ defmodule WhoWasThere.BillingTest do
     previous_verify = Application.get_env(:whowasthere, :solana_verify)
 
     Application.put_env(:whowasthere, :pay_bypass_txid, bypass)
+
     Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:error, :should_not_call} end)
 
     try do
@@ -78,6 +80,68 @@ defmodule WhoWasThere.BillingTest do
 
     :ets.insert(:wwt_pay, {pay.id, meta})
     refute Billing.allow_pageview?(pay.id)
+  end
+
+  test "USDC above 30 raises the monthly pageview cap in 500k steps" do
+    previous = Application.get_env(:whowasthere, :solana_verify)
+
+    try do
+      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 90} end)
+      assert {:ok, pay90} = Billing.open_paid(@txid, "a@b.co")
+      assert Billing.status(pay90).month_cap == Billing.month_cap() * 3
+
+      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 45} end)
+      tx45 = String.replace_suffix(@txid, "vY4", "vY5")
+      assert {:ok, pay45} = Billing.open_paid(tx45, "a@b.co")
+      assert Billing.status(pay45).month_cap == Billing.month_cap()
+
+      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 60} end)
+      tx60 = String.replace_suffix(@txid, "vY4", "vY6")
+      assert {:ok, pay60} = Billing.open_paid(tx60, "a@b.co")
+      assert Billing.status(pay60).month_cap == Billing.month_cap() * 2
+
+      cap = Billing.status(pay60).month_cap
+
+      :ets.insert(
+        :wwt_pay,
+        {pay60.id,
+         %{
+           id: pay60.id,
+           kind: pay60.kind,
+           txid: pay60.txid,
+           email: pay60.email,
+           expires_at: pay60.expires_at,
+           month: pay60.month,
+           hits_month: cap - 1,
+           month_cap: cap,
+           notices: "",
+           dirty: true
+         }}
+      )
+
+      assert Billing.allow_pageview?(pay60.id)
+      Billing.record_pageview(pay60.id)
+      refute Billing.allow_pageview?(pay60.id)
+    after
+      Application.put_env(:whowasthere, :solana_verify, previous)
+    end
+  end
+
+  test "renew with a larger payment raises the cap" do
+    previous = Application.get_env(:whowasthere, :solana_verify)
+
+    try do
+      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 30} end)
+      assert {:ok, pay} = Billing.open_paid(@txid, "a@b.co")
+      assert Billing.status(pay).month_cap == Billing.month_cap()
+
+      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 60} end)
+      new_txid = String.replace_suffix(@txid, "vY4", "vZ8")
+      assert {:ok, renewed} = Billing.renew(pay.id, new_txid, "a@b.co")
+      assert Billing.status(renewed).month_cap == Billing.month_cap() * 2
+    after
+      Application.put_env(:whowasthere, :solana_verify, previous)
+    end
   end
 
   test "expiry mail is sent once" do

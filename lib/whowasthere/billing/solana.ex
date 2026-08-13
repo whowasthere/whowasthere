@@ -5,15 +5,19 @@ defmodule WhoWasThere.Billing.Solana do
 
   def verify_usdc_payment(txid, wallet, min_usdc) do
     if bypass_txid?(txid) do
-      :ok
+      {:ok, min_usdc}
     else
       case Application.get_env(:whowasthere, :solana_verify, :rpc) do
-        :accept_all -> :ok
-        fun when is_function(fun, 3) -> fun.(txid, wallet, min_usdc)
+        :accept_all -> {:ok, min_usdc}
+        fun when is_function(fun, 3) -> wrap_verify(fun.(txid, wallet, min_usdc), min_usdc)
         :rpc -> verify_rpc(txid, wallet, min_usdc)
       end
     end
   end
+
+  defp wrap_verify(:ok, min_usdc), do: {:ok, min_usdc}
+  defp wrap_verify({:ok, paid} = ok, _) when is_integer(paid) and paid > 0, do: ok
+  defp wrap_verify(other, _), do: other
 
   defp bypass_txid?(txid) when is_binary(txid) do
     case Application.get_env(:whowasthere, :pay_bypass_txid) do
@@ -26,6 +30,10 @@ defmodule WhoWasThere.Billing.Solana do
   end
 
   defp bypass_txid?(_), do: false
+
+  defp usdc_amount(smallest) when is_integer(smallest) do
+    div(smallest, 10 ** @usdc_decimals)
+  end
 
   defp verify_rpc(txid, wallet, min_usdc) do
     rpc = Application.get_env(:whowasthere, :solana_rpc) || "https://api.mainnet-beta.solana.com"
@@ -110,8 +118,8 @@ defmodule WhoWasThere.Billing.Solana do
       delta = post - pre
 
       cond do
-        delta >= need -> :ok
-        amount >= need and pre == 0 -> :ok
+        delta >= need -> {:ok, usdc_amount(delta)}
+        amount >= need and pre == 0 -> {:ok, usdc_amount(amount)}
         true -> {:error, :amount_too_low}
       end
     end

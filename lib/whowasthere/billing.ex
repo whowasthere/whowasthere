@@ -129,6 +129,7 @@ defmodule WhoWasThere.Billing do
         expires_at: DateTime.add(now, @trial_days * 86_400, :second),
         month: month_key(now),
         hits_month: 0,
+        month_cap: @month_cap,
         notices: "",
         created_at: now
       }
@@ -142,14 +143,14 @@ defmodule WhoWasThere.Billing do
   def open_paid(txid, email \\ nil) do
     with {:ok, email} <- normalize_email(email),
          {:ok, txid} <- normalize_txid(txid),
-         :ok <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
+         {:ok, paid_usdc} <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
       cond do
         existing = bypass_txid?(txid) && (get(txid) || get_by_txid(txid)) ->
           {:ok, refresh_paid(existing, email)}
 
         true ->
           with :ok <- ensure_fresh_txid(txid) do
-            insert_paid(txid, email)
+            insert_paid(txid, email, cap_for_usdc(paid_usdc))
           end
       end
     end
@@ -184,8 +185,8 @@ defmodule WhoWasThere.Billing do
     with {:ok, email} <- normalize_email(email),
          {:ok, to_txid} <- normalize_txid(to_txid),
          %Payment{} = from <- get(from_id) || get_by_txid(from_id),
-         :ok <- Solana.verify_usdc_payment(to_txid, wallet(), @price_usdc) do
-      {:ok, promote(from, to_txid, email)}
+         {:ok, paid_usdc} <- Solana.verify_usdc_payment(to_txid, wallet(), @price_usdc) do
+      {:ok, promote(from, to_txid, email, cap_for_usdc(paid_usdc))}
     else
       nil -> {:error, :unknown_payment}
       other -> other
@@ -195,7 +196,7 @@ defmodule WhoWasThere.Billing do
   # Keep the id already baked into dashboard tokens and ingest keys.
   # A new txid is stored on that same payment when it is free; otherwise
   # the existing paid row is only used as a source of expiry.
-  defp promote(from, to_txid, email) do
+  defp promote(from, to_txid, email, month_cap) do
     existing = get(to_txid) || get_by_txid(to_txid)
 
     cond do
@@ -205,19 +206,28 @@ defmodule WhoWasThere.Billing do
       match?(%Payment{id: id} when id != from.id, existing) ->
         other = existing
         refreshed = refresh_paid(other, email || from.email)
-        upgraded = upgrade_in_place(from, to_txid, email || from.email || other.email, refreshed)
+
+        upgraded =
+          upgrade_in_place(
+            from,
+            to_txid,
+            email || from.email || other.email,
+            refreshed,
+            month_cap
+          )
+
         reattach_sites(other.id, upgraded.id)
         upgraded
 
       true ->
         case ensure_fresh_txid(to_txid) do
-          :ok -> upgrade_in_place(from, to_txid, email || from.email, nil)
+          :ok -> upgrade_in_place(from, to_txid, email || from.email, nil, month_cap)
           {:error, :txid_used} -> refresh_paid(from, email)
         end
     end
   end
 
-  defp insert_paid(txid, email) do
+  defp insert_paid(txid, email, month_cap) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     pay = %Payment{
@@ -228,6 +238,7 @@ defmodule WhoWasThere.Billing do
       expires_at: DateTime.add(now, @paid_days * 86_400, :second),
       month: month_key(now),
       hits_month: 0,
+      month_cap: month_cap,
       notices: "",
       created_at: now
     }
@@ -237,7 +248,7 @@ defmodule WhoWasThere.Billing do
     {:ok, inserted}
   end
 
-  defp upgrade_in_place(from, to_txid, email, source) do
+  defp upgrade_in_place(from, to_txid, email, source, month_cap) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     source_exp = source && source.expires_at
     from_exp = from.expires_at
@@ -254,6 +265,7 @@ defmodule WhoWasThere.Billing do
       kind: "paid",
       txid: txid,
       expires_at: DateTime.add(base, @paid_days * 86_400, :second),
+      month_cap: month_cap,
       notices: drop_expiry_notices(from.notices)
     }
 
@@ -364,7 +376,7 @@ defmodule WhoWasThere.Billing do
   def allow_pageview?(payment_id) when is_binary(payment_id) do
     case ensure_meta(current_id(payment_id) || payment_id) do
       nil -> false
-      meta -> active?(meta) and meta.hits_month < @month_cap
+      meta -> active?(meta) and meta.hits_month < meta_cap(meta)
     end
   end
 
@@ -385,7 +397,7 @@ defmodule WhoWasThere.Billing do
         :ok
 
       meta ->
-        if active?(meta) and meta.hits_month < @month_cap do
+        if active?(meta) and meta.hits_month < meta_cap(meta) do
           updated = %{meta | hits_month: meta.hits_month + 1, dirty: true}
           cache_put(updated)
           maybe_quota_mail(updated)
@@ -416,7 +428,8 @@ defmodule WhoWasThere.Billing do
   defp status_from_meta(meta) do
     now = DateTime.utc_now()
     expired? = not active?(meta)
-    left = max(@month_cap - meta.hits_month, 0)
+    cap = meta_cap(meta)
+    left = max(cap - meta.hits_month, 0)
 
     %{
       id: meta.id,
@@ -428,9 +441,9 @@ defmodule WhoWasThere.Billing do
       days_left: days_left(meta.expires_at, now),
       month: meta.month,
       hits_month: meta.hits_month,
-      month_cap: @month_cap,
+      month_cap: cap,
       hits_left: left,
-      over_quota?: meta.hits_month >= @month_cap
+      over_quota?: meta.hits_month >= cap
     }
   end
 
@@ -468,6 +481,7 @@ defmodule WhoWasThere.Billing do
       expires_at: pay.expires_at,
       month: pay.month,
       hits_month: pay.hits_month,
+      month_cap: pay.month_cap || @month_cap,
       notices: pay.notices || "",
       dirty: false
     }
@@ -527,11 +541,11 @@ defmodule WhoWasThere.Billing do
 
   defp maybe_quota_mail(meta) do
     cond do
-      meta.hits_month >= @month_cap and not noticed?(meta, "quota_full") ->
+      meta.hits_month >= meta_cap(meta) and not noticed?(meta, "quota_full") ->
         Mailer.send(meta.email, "Who Was There monthly cap reached", quota_body(meta, :full))
         notice(meta, "quota_full")
 
-      meta.hits_month >= div(@month_cap * 4, 5) and not noticed?(meta, "quota_80") ->
+      meta.hits_month >= div(meta_cap(meta) * 4, 5) and not noticed?(meta, "quota_80") ->
         Mailer.send(meta.email, "Who Was There at 80% of monthly cap", quota_body(meta, :warn))
         notice(meta, "quota_80")
 
@@ -567,7 +581,7 @@ defmodule WhoWasThere.Billing do
 
     payment  #{meta.id}
     month    #{meta.month}
-    hits     #{meta.hits_month} / #{@month_cap}
+    hits     #{meta.hits_month} / #{meta_cap(meta)}
 
     #{if kind == :full, do: "The monthly pageview cap is reached. Further pageviews are dropped until next month.", else: "You are at about 80% of the monthly pageview cap."}
     """
@@ -608,6 +622,15 @@ defmodule WhoWasThere.Billing do
   defp month_key(%DateTime{} = dt) do
     "#{dt.year}-#{dt.month |> Integer.to_string() |> String.pad_leading(2, "0")}"
   end
+
+  defp cap_for_usdc(paid_usdc) when is_integer(paid_usdc) and paid_usdc >= @price_usdc do
+    div(paid_usdc, @price_usdc) * @month_cap
+  end
+
+  defp cap_for_usdc(_), do: @month_cap
+
+  defp meta_cap(%{month_cap: cap}) when is_integer(cap) and cap > 0, do: cap
+  defp meta_cap(_), do: @month_cap
 
   defp maybe_set_email(pay, nil), do: pay
 

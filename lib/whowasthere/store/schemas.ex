@@ -21,6 +21,7 @@ defmodule WhoWasThere.Store.Payment do
     field :expires_at, :utc_datetime
     field :month, :string
     field :hits_month, :integer, default: 0
+    field :month_cap, :integer, default: 500_000
     field :notices, :string, default: ""
     field :created_at, :utc_datetime
   end

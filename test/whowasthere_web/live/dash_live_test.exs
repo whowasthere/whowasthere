@@ -30,6 +30,13 @@ defmodule WhoWasThereWeb.DashLiveTest do
     {:ok, view, html} = live(conn, "/d/#{site.token}")
     assert html =~ "pricing"
     assert render(view) =~ "pageviews"
+    assert has_element?(view, "#traffic-chart")
+    assert has_element?(view, "#chart-devices")
+    assert has_element?(view, "#chart-browsers")
+    assert has_element?(view, "#chart-os")
+    assert has_element?(view, "#chart-sessions")
+    assert has_element?(view, "#chart-countries")
+    assert has_element?(view, "#chart-viewport")
   end
 
   test "shows the locked host, not the site id", %{conn: conn} do

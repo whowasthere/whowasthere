@@ -351,91 +351,104 @@ a.chip:hover {
   .wall { column-count: 3; }
 }
 
-/* Column chart */
-.chart {
-  position: relative;
+/* SVG charts */
+.viz {
+  display: block;
+  overflow: visible;
 }
 
-.chart::before {
-  content: "";
-  position: absolute;
-  inset: 0;
+.viz-grid line {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.viz-grid text,
+.viz-axis text,
+.viz-bar-key,
+.viz-bar-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: color-mix(in oklab, var(--color-base-content) 40%, transparent);
+}
+
+.viz-bar-val {
+  fill: color-mix(in oklab, var(--color-base-content) 72%, transparent);
+  font-size: 10px;
+}
+
+.viz-area {
   pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--line-soft) 0 1px,
-    transparent 1px 25%
-  );
 }
 
-.chart::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 1px;
-  background: var(--line);
+.viz-line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 8px color-mix(in oklab, var(--color-primary) 48%, transparent));
+  vector-effect: non-scaling-stroke;
 }
 
-.col {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  align-items: flex-end;
-  height: 100%;
+.viz-line-2 {
+  stroke: var(--color-accent);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.75;
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--color-accent) 40%, transparent));
 }
 
-/* An empty slot still shows on the baseline, so the axis reads as 24 buckets. */
-.col-empty {
-  width: 100%;
-  height: 2px;
-  border-radius: 1px;
-  background: color-mix(in oklab, var(--color-base-content) 16%, transparent);
+.viz-dot {
+  fill: var(--color-base-100);
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
-.col-fill {
-  width: 100%;
-  border-radius: 3px 3px 1px 1px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, var(--color-primary) 95%, transparent),
-    color-mix(in oklab, var(--color-primary) 34%, transparent)
-  );
-  transform-origin: bottom;
-  animation: col-rise 0.55s var(--ease) both;
+.viz-bar rect {
+  fill-opacity: 0.92;
+  stroke: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  stroke-width: 1;
+  transition: filter 0.2s var(--ease), fill-opacity 0.2s var(--ease);
+}
+
+.viz-bar:hover rect {
+  filter: brightness(1.28);
+}
+
+.viz-slice {
+  stroke: color-mix(in oklab, var(--color-base-100) 65%, transparent);
+  stroke-width: 2;
   transition: filter 0.2s var(--ease);
 }
 
-.col:hover .col-fill {
-  filter: brightness(1.35);
+.viz-slice:hover {
+  filter: brightness(1.18);
 }
 
-@keyframes col-rise {
-  from { transform: scaleY(0.02); opacity: 0.4; }
-  to { transform: scaleY(1); opacity: 1; }
+.viz-swatch {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-primary);
 }
 
-.col-tip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  white-space: nowrap;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  background: var(--color-base-300);
-  padding: 0.25rem 0.5rem;
-  font-family: var(--mono);
-  font-size: 0.6875rem;
-  color: var(--color-base-content);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s var(--ease);
+.viz-swatch-line {
+  height: 2px;
+  width: 0.9rem;
+  border-radius: 1px;
 }
 
-.col:hover .col-tip {
-  opacity: 1;
+.viz-swatch-dash {
+  height: 2px;
+  width: 0.9rem;
+  border-radius: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-accent) 0 4px,
+    transparent 4px 7px
+  );
 }
 
 /* Ranked rows with the bar behind the label */
@@ -489,7 +502,7 @@ a.chip:hover {
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .col-fill, .row-bar, .pulse::after { animation: none; }
+  .row-bar, .pulse::after { animation: none; }
 }
 
 /* ---------------------------------------------------------------- *

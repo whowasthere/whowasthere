@@ -128,7 +128,7 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 ## Pricing
 
-**$30 USDC / year** on Solana. One payment covers unlimited sites and a shared **500 000 pageviews / month**. Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew. Same price on the hosted cloud and on a self-hosted copy (you receive the USDC if you set `PAY_WALLET`).
+**$30 USDC / year** on Solana. One payment covers unlimited sites and a shared **500 000 pageviews / month**. Send more in the same transaction and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew. Same price on the hosted cloud and on a self-hosted copy (you receive the USDC if you set `PAY_WALLET`).
 
 ```bash
 curl -s https://whowasthere.fyi/pay
