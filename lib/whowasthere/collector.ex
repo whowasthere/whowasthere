@@ -70,6 +70,26 @@ defmodule WhoWasThere.Collector do
     )
   end
 
+  def open_journeys(id) do
+    :ets.foldl(
+      fn
+        {{^id, _}, sess}, acc ->
+          chain = Map.get(sess, :chain) || []
+
+          if length(chain) >= 2 do
+            Map.update(acc, format_chain(chain), 1, &(&1 + 1))
+          else
+            acc
+          end
+
+        _, acc ->
+          acc
+      end,
+      %{},
+      :wwt_sess
+    )
+  end
+
   def empty_snap do
     %{
       pageviews: 0,
@@ -492,14 +512,7 @@ defmodule WhoWasThere.Collector do
         {chain, snap}
 
       true ->
-        chain = chain ++ [step]
-
-        snap =
-          if length(chain) >= 2,
-            do: %{snap | dims: bump(snap.dims, "chain", format_chain(chain))},
-            else: snap
-
-        {chain, snap}
+        {chain ++ [step], snap}
     end
   end
 
@@ -534,7 +547,14 @@ defmodule WhoWasThere.Collector do
           nil
       end
 
-    if exit_path, do: %{snap | dims: bump(snap.dims, "exit", exit_path)}, else: snap
+    snap = if exit_path, do: %{snap | dims: bump(snap.dims, "exit", exit_path)}, else: snap
+    chain = List.wrap(chain)
+
+    if length(chain) >= 2 do
+      %{snap | dims: bump(snap.dims, "chain", format_chain(chain))}
+    else
+      snap
+    end
   end
 
   defp follow_path(snap, nil, to, 0) do

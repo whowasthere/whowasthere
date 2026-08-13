@@ -65,8 +65,8 @@ defmodule WhoWasThere.CollectorTest do
     assert Enum.any?(report.dims["entry"], &(&1.key == "/home"))
     assert Enum.any?(report.dims["flow"], &(&1.key == "/home → /pricing"))
     assert Enum.any?(report.dims["flow"], &(&1.key == "/pricing → /checkout"))
-    assert Enum.any?(report.dims["chain"], &(&1.key == "/home → /pricing"))
     assert Enum.any?(report.dims["chain"], &(&1.key == "/home → /pricing → /checkout"))
+    refute Enum.any?(report.dims["chain"], &(&1.key == "/home → /pricing"))
     assert Enum.any?(report.dims["exit"], &(&1.key == "/checkout"))
     refute Enum.any?(report.dims["flow"], &(&1.key == "/checkout → /home"))
     refute Enum.any?(report.dims["chain"], &String.contains?(&1.key, "/checkout → /home"))
@@ -92,12 +92,36 @@ defmodule WhoWasThere.CollectorTest do
     report = Analytics.report("journeys2", :today)
 
     assert Enum.any?(report.dims["click"], &(&1.key == "Pricing"))
-    assert Enum.any?(report.dims["chain"], &(&1.key == "/home → click:Pricing"))
 
     assert Enum.any?(
              report.dims["chain"],
              &(&1.key == "/home → click:Pricing → /pricing")
            )
+
+    refute Enum.any?(report.dims["chain"], &(&1.key == "/home → click:Pricing"))
+  end
+
+  test "counts the same finished journey twice for two sessions" do
+    {:ok, _} = Collector.create_site("journeys3", "example.com")
+    t = System.system_time(:millisecond)
+
+    ingest(%{site_id: "journeys3", ip: "8.8.8.8", path: "/home", at: t})
+    ingest(%{site_id: "journeys3", ip: "8.8.8.8", path: "/pricing", at: t + 1_000})
+    ingest(%{site_id: "journeys3", ip: "8.8.8.8", path: "/home", at: t + 40 * 60 * 1000})
+
+    ingest(%{
+      site_id: "journeys3",
+      ip: "8.8.8.8",
+      path: "/pricing",
+      at: t + 40 * 60 * 1000 + 1_000
+    })
+
+    ingest(%{site_id: "journeys3", ip: "8.8.8.8", path: "/x", at: t + 80 * 60 * 1000})
+
+    Collector.ping()
+    report = Analytics.report("journeys3", :today)
+    row = Enum.find(report.dims["chain"], &(&1.key == "/home → /pricing"))
+    assert row && row.pageviews == 2
   end
 
   test "keeps first UTM for the rest of the session" do

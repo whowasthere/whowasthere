@@ -22,7 +22,14 @@ defmodule WhoWasThere.Analytics do
       if Date.compare(from, hist_to) != :gt, do: Store.range_series(id, from, hist_to), else: []
 
     totals = if today_snap, do: merge_totals(hist, today_snap), else: hist
-    dims = if today_snap, do: merge_dims(hist_dims, today_snap.dims), else: hist_dims
+
+    dims =
+      if today_snap do
+        today_dims = merge_open_chain(today_snap.dims, Collector.open_journeys(id))
+        merge_dims(hist_dims, today_dims)
+      else
+        hist_dims
+      end
 
     series =
       if today_snap do
@@ -89,6 +96,12 @@ defmodule WhoWasThere.Analytics do
     Map.merge(today, hist, fn _kind, a, b ->
       Map.merge(a, b, fn _k, x, y -> x + y end)
     end)
+  end
+
+  defp merge_open_chain(dims, open) when open == %{}, do: dims
+
+  defp merge_open_chain(dims, open) do
+    Map.update(dims, "chain", open, &Map.merge(&1, open, fn _, a, b -> a + b end))
   end
 
   defp sort_dims(dims) do

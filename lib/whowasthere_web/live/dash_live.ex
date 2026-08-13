@@ -231,7 +231,7 @@ defmodule WhoWasThereWeb.DashLive do
             title="Journeys"
             rows={@report.dims["chain"] || []}
             total={@report.pageviews}
-            hint="whole session sequences, clicks included, up to 8 steps"
+            hint="one path per session, clicks included, up to 8 steps"
             wrap
           />
           <.dim

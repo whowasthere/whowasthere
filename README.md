@@ -118,7 +118,7 @@ The public id does not work as a dashboard path. The page updates live. You can 
 | Bounce rate | sessions with at most one pageview |
 | Avg. time | total duration / sessions |
 | Live | sessions active in the last 5 minutes |
-| Journeys | full session sequence including clicks, up to 8 steps, counted as aggregates |
+| Journeys | one sequence per session including clicks, up to 8 steps |
 | Steps | page `A → B` |
 | Clicks | link/button/`data-wwt` clicks |
 | Landings / exits | first and last page of a session |
@@ -130,7 +130,7 @@ Country comes from a CDN header (`CF-IPCountry`, `CloudFront-Viewer-Country`, `x
 
 IP addresses, User-Agent strings, cookies, and individual hits never hit disk.
 
-Uniques use a salt that rotates every UTC day, so the same person is not linked across days. A session lives in ETS for 30 minutes and keeps a short chain of pages and clicks (at most 8 steps). Each time the chain grows, that sequence is counted. When the session expires, the last page is an exit. Individual visit trails are not stored.
+Uniques use a salt that rotates every UTC day, so the same person is not linked across days. A session lives in ETS for 30 minutes and keeps a short chain of pages and clicks (at most 8 steps). The dashboard shows the current chain while the session is open; when it expires, that finished sequence is counted once and the last page is an exit. Intermediate prefixes are not stored. Individual visit trails are not stored.
 
 SQLite holds `sites`, `days`, `dims`, and `hours` — aggregates only, typically kilobytes per site per day. Today's HyperLogLog sketch (~4 KB) is kept so a restart does not reset uniques; older days keep only the number.
 
