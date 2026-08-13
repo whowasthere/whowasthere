@@ -1,6 +1,5 @@
-# Production stack on 204.168.206.92 (Traefik network `edge`).
-# Image is built in GitHub Actions and published to GHCR.
-# Run: IMAGE_TAG=latest docker compose up -d
+# Example compose for self-hosting behind a reverse proxy.
+# IMAGE_TAG=latest docker compose up -d
 
 services:
   app:
@@ -12,7 +11,7 @@ services:
       - .env
     environment:
       PHX_SERVER: "true"
-      PHX_HOST: ${DOMAIN:-whowasthere.fyi}
+      PHX_HOST: ${DOMAIN:-localhost}
       PORT: "4000"
       DATABASE_PATH: /data/whowasthere.db
     volumes:
@@ -22,7 +21,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=edge"
-      - "traefik.http.routers.whowasthere.rule=Host(`${DOMAIN:-whowasthere.fyi}`)"
+      - "traefik.http.routers.whowasthere.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.whowasthere.entrypoints=websecure"
       - "traefik.http.routers.whowasthere.tls=true"
       - "traefik.http.routers.whowasthere.tls.certresolver=le"

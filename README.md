@@ -206,7 +206,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   http://localhost:4000/w.js
 ```
 
-## Production
+## Self-host
 
 | Variable | Purpose |
 | --- | --- |
@@ -220,18 +220,6 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 | `SOLANA_RPC` | optional RPC URL (default public mainnet) |
 | `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
 
-Production host: [whowasthere.fyi](https://whowasthere.fyi). CI builds the Docker image to GHCR and deploys to the shared Traefik host via `compose.yml`.
-
-```bash
-mix phx.gen.secret
-MIX_ENV=prod mix assets.deploy
-MIX_ENV=prod mix release
-PHX_SERVER=true SECRET_KEY_BASE=... DATABASE_PATH=/data/whowasthere.db PHX_HOST=whowasthere.fyi \
-  _build/prod/rel/whowasthere/bin/whowasthere start
-```
-
-Releases run migrations on boot.
-
 ```bash
 docker build -t whowasthere .
 docker run --rm -p 4000:4000 \
@@ -241,7 +229,7 @@ docker run --rm -p 4000:4000 \
   whowasthere
 ```
 
-Inside the container the database is `/data/whowasthere.db`. Behind a TLS proxy send `X-Forwarded-Proto`; production enables `force_ssl`. `/health` is excluded from the HTTPS redirect.
+Or use the included `compose.yml`. Behind TLS, send `X-Forwarded-Proto`. `/health` is excluded from the HTTPS redirect. Releases run migrations on boot.
 
 ## License
 

@@ -39,3 +39,7 @@ npm-debug.log
 *.db
 *.db-*
 
+# Local agent / editor notes
+AGENTS.md
+.cursor/
+
