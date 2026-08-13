@@ -57,6 +57,16 @@ defmodule WhoWasThere.BillingTest do
       assert renewed.id == trial.id
       assert renewed.kind == "paid"
       assert Billing.status(trial.id).kind == "paid"
+      assert Billing.status(pay.id).month_cap == Billing.month_cap()
+
+      assert {:ok, bumped} = Billing.open_paid(bypass <> ":90", "ops@example.com")
+      assert bumped.id == pay.id
+      assert Billing.status(bumped).month_cap == Billing.month_cap() * 3
+
+      assert {:ok, same} = Billing.open_paid(bypass, "ops@example.com")
+      assert Billing.status(same).month_cap == Billing.month_cap() * 3
+
+      assert {:error, :bad_txid} = Billing.open_paid(bypass <> ":12", nil)
     after
       Application.put_env(:whowasthere, :pay_bypass_txid, previous)
       Application.put_env(:whowasthere, :solana_verify, previous_verify)

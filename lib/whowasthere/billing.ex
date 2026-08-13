@@ -142,11 +142,10 @@ defmodule WhoWasThere.Billing do
 
   def open_paid(txid, email \\ nil) do
     with {:ok, email} <- normalize_email(email),
-         {:ok, txid} <- normalize_txid(txid),
-         {:ok, paid_usdc} <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
+         {:ok, txid, paid_usdc} <- resolve_payment(txid) do
       cond do
         existing = bypass_txid?(txid) && (get(txid) || get_by_txid(txid)) ->
-          {:ok, refresh_paid(existing, email)}
+          {:ok, refresh_paid(existing, email, cap_for_usdc(paid_usdc))}
 
         true ->
           with :ok <- ensure_fresh_txid(txid) do
@@ -162,12 +161,21 @@ defmodule WhoWasThere.Billing do
         open_trial(email)
 
       true ->
-        case get_by_txid(String.trim(txid)) || get(String.trim(txid)) do
+        raw = String.trim(txid)
+        lookup = bypass_lookup(raw)
+
+        case get_by_txid(lookup) || get(lookup) do
           %Payment{} = pay ->
             with {:ok, email} <- normalize_email(email) do
               pay =
                 if bypass_txid?(pay.id) or (is_binary(pay.txid) and bypass_txid?(pay.txid)) do
-                  refresh_paid(pay, email)
+                  cap =
+                    case split_bypass(raw) do
+                      {:bypass, _, usdc} -> cap_for_usdc(usdc)
+                      _ -> nil
+                    end
+
+                  refresh_paid(pay, email, cap)
                 else
                   maybe_set_email(pay, email)
                 end
@@ -183,9 +191,8 @@ defmodule WhoWasThere.Billing do
 
   def renew(from_id, to_txid, email \\ nil) do
     with {:ok, email} <- normalize_email(email),
-         {:ok, to_txid} <- normalize_txid(to_txid),
-         %Payment{} = from <- get(from_id) || get_by_txid(from_id),
-         {:ok, paid_usdc} <- Solana.verify_usdc_payment(to_txid, wallet(), @price_usdc) do
+         {:ok, to_txid, paid_usdc} <- resolve_payment(to_txid),
+         %Payment{} = from <- get(from_id) || get_by_txid(from_id) do
       {:ok, promote(from, to_txid, email, cap_for_usdc(paid_usdc))}
     else
       nil -> {:error, :unknown_payment}
@@ -311,7 +318,7 @@ defmodule WhoWasThere.Billing do
     end)
   end
 
-  defp refresh_paid(%Payment{} = pay, email) do
+  defp refresh_paid(%Payment{} = pay, email, month_cap \\ nil) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     base = if DateTime.compare(pay.expires_at, now) == :gt, do: pay.expires_at, else: now
 
@@ -331,6 +338,13 @@ defmodule WhoWasThere.Billing do
 
         true ->
           changes
+      end
+
+    changes =
+      if is_integer(month_cap) and month_cap > (pay.month_cap || @month_cap) do
+        Map.put(changes, :month_cap, month_cap)
+      else
+        changes
       end
 
     updated = pay |> Ecto.Changeset.change(changes) |> Repo.update!()
@@ -649,23 +663,83 @@ defmodule WhoWasThere.Billing do
     if get_by_txid(txid), do: {:error, :txid_used}, else: :ok
   end
 
-  defp normalize_txid(nil), do: {:error, :txid_required}
-  defp normalize_txid(""), do: {:error, :txid_required}
+  defp resolve_payment(nil), do: {:error, :txid_required}
+  defp resolve_payment(""), do: {:error, :txid_required}
 
-  defp normalize_txid(txid) do
+  defp resolve_payment(txid) do
     txid = String.trim(txid)
 
-    cond do
-      bypass_txid?(txid) ->
-        {:ok, txid}
+    case split_bypass(txid) do
+      {:bypass, canonical, usdc} ->
+        {:ok, canonical, usdc}
 
-      String.length(txid) in 64..128 and txid =~ ~r/^[1-9A-HJ-NP-Za-km-z]+$/ ->
-        {:ok, txid}
-
-      true ->
+      :invalid ->
         {:error, :bad_txid}
+
+      :no ->
+        with {:ok, txid} <- normalize_chain_txid(txid),
+             {:ok, paid_usdc} <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
+          {:ok, txid, paid_usdc}
+        end
     end
   end
+
+  defp normalize_chain_txid(txid) do
+    if String.length(txid) in 64..128 and txid =~ ~r/^[1-9A-HJ-NP-Za-km-z]+$/ do
+      {:ok, txid}
+    else
+      {:error, :bad_txid}
+    end
+  end
+
+  defp bypass_lookup(txid) do
+    case split_bypass(txid) do
+      {:bypass, canonical, _} -> canonical
+      _ -> txid
+    end
+  end
+
+  @bypass_usdc_max 30_000
+
+  defp split_bypass(txid) when is_binary(txid) do
+    case Application.get_env(:whowasthere, :pay_bypass_txid) do
+      bypass when is_binary(bypass) and bypass != "" ->
+        cond do
+          byte_size(bypass) == byte_size(txid) and Plug.Crypto.secure_compare(bypass, txid) ->
+            {:bypass, bypass, @price_usdc}
+
+          byte_size(txid) > byte_size(bypass) + 1 ->
+            prefix = binary_part(txid, 0, byte_size(bypass))
+            rest = binary_part(txid, byte_size(bypass), byte_size(txid) - byte_size(bypass))
+
+            if Plug.Crypto.secure_compare(prefix, bypass) do
+              parse_bypass_usdc(bypass, rest)
+            else
+              :no
+            end
+
+          true ->
+            :no
+        end
+
+      _ ->
+        :no
+    end
+  end
+
+  defp split_bypass(_), do: :no
+
+  defp parse_bypass_usdc(canonical, ":" <> suffix) do
+    case Integer.parse(suffix) do
+      {n, ""} when n >= @price_usdc and n <= @bypass_usdc_max ->
+        {:bypass, canonical, n}
+
+      _ ->
+        :invalid
+    end
+  end
+
+  defp parse_bypass_usdc(_, _), do: :no
 
   defp bypass_txid?(txid) when is_binary(txid) do
     case Application.get_env(:whowasthere, :pay_bypass_txid) do

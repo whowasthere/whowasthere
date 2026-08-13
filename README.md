@@ -239,12 +239,13 @@ docker run --rm -p 4000:4000 \
 
 Or use the included `compose.yml`. Behind TLS, send `X-Forwarded-Proto`. `/health` is excluded from the HTTPS redirect. Releases run migrations on boot.
 
-`PAY_BYPASS_TXID` is accepted as `txid` on `/new` and as `to` on `/renew`. Chain lookup is skipped, and the same value can be reused:
+`PAY_BYPASS_TXID` is accepted as `txid` on `/new` and as `to` on `/renew`. Chain lookup is skipped, and the same value can be reused. Append `:USDC` to pretend a larger payment and raise the monthly cap (500 000 pageviews per $30, same as a real transfer):
 
 ```bash
 export PAY_BYPASS_TXID=dev-paid
 curl -s 'http://localhost:4000/new?txid=dev-paid'
-curl -s 'http://localhost:4000/renew?from=OLD_PAY&to=dev-paid'
+curl -s 'http://localhost:4000/new?txid=dev-paid:90'   # 1 500 000 pageviews / month
+curl -s 'http://localhost:4000/renew?from=OLD_PAY&to=dev-paid:60'
 ```
 
 ## License
