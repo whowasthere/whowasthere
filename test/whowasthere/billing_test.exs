@@ -33,6 +33,24 @@ defmodule WhoWasThere.BillingTest do
     assert renewed.hits_month == 0 or renewed.hits_month == pay.hits_month
   end
 
+  test "PAY_BYPASS_TXID skips chain verification" do
+    bypass = "bypass-token-for-tests-only"
+    previous = Application.get_env(:whowasthere, :pay_bypass_txid)
+    previous_verify = Application.get_env(:whowasthere, :solana_verify)
+
+    Application.put_env(:whowasthere, :pay_bypass_txid, bypass)
+    Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:error, :should_not_call} end)
+
+    try do
+      assert {:ok, pay} = Billing.open_paid(bypass, "ops@example.com")
+      assert pay.id == bypass
+      assert pay.kind == "paid"
+    after
+      Application.put_env(:whowasthere, :pay_bypass_txid, previous)
+      Application.put_env(:whowasthere, :solana_verify, previous_verify)
+    end
+  end
+
   test "quota blocks pageviews after the monthly cap" do
     assert {:ok, pay} = Billing.open_trial(nil)
 

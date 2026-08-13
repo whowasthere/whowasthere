@@ -4,12 +4,28 @@ defmodule WhoWasThere.Billing.Solana do
   @usdc_decimals 6
 
   def verify_usdc_payment(txid, wallet, min_usdc) do
-    case Application.get_env(:whowasthere, :solana_verify, :rpc) do
-      :accept_all -> :ok
-      fun when is_function(fun, 3) -> fun.(txid, wallet, min_usdc)
-      :rpc -> verify_rpc(txid, wallet, min_usdc)
+    if bypass_txid?(txid) do
+      :ok
+    else
+      case Application.get_env(:whowasthere, :solana_verify, :rpc) do
+        :accept_all -> :ok
+        fun when is_function(fun, 3) -> fun.(txid, wallet, min_usdc)
+        :rpc -> verify_rpc(txid, wallet, min_usdc)
+      end
     end
   end
+
+  defp bypass_txid?(txid) when is_binary(txid) do
+    case Application.get_env(:whowasthere, :pay_bypass_txid) do
+      bypass when is_binary(bypass) and bypass != "" ->
+        byte_size(bypass) == byte_size(txid) and Plug.Crypto.secure_compare(bypass, txid)
+
+      _ ->
+        false
+    end
+  end
+
+  defp bypass_txid?(_), do: false
 
   defp verify_rpc(txid, wallet, min_usdc) do
     rpc = Application.get_env(:whowasthere, :solana_rpc) || "https://api.mainnet-beta.solana.com"

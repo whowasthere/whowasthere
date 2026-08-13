@@ -71,6 +71,10 @@ if config_env() == :prod do
     config :whowasthere, pay_wallet: wallet
   end
 
+  if bypass = System.get_env("PAY_BYPASS_TXID") do
+    config :whowasthere, pay_bypass_txid: bypass
+  end
+
   if rpc = System.get_env("SOLANA_RPC") do
     config :whowasthere, solana_rpc: rpc
   end
