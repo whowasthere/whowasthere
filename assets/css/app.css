@@ -650,10 +650,98 @@ a.chip:hover {
   font-weight: 600;
 }
 
+.hads-unit {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 2rem;
+  min-height: 7.5rem;
+  padding: 1.15rem 1.25rem 1.2rem;
+}
+
+.hads-unit-attribution {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  transition: color 0.2s var(--ease);
+}
+
+.hads-unit-attribution:hover {
+  color: var(--color-primary);
+}
+
+.hads-unit [data-hads-title] {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 1.4em;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hads-unit [data-hads-text] {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  min-height: 2.8em;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hads-unit [data-hads-url] {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 0.35rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-primary) 35%, transparent);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: border-color 0.2s var(--ease);
+}
+
+.hads-unit [data-hads-url]:hover {
+  border-bottom-color: color-mix(in oklab, var(--color-primary) 70%, transparent);
+}
+
+.hads-unit [data-hads-url]:empty {
+  display: none;
+}
+
+.hads-unit-skeleton {
+  display: block;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+
+.hads-unit-skeleton--title {
+  width: 72%;
+  height: 1rem;
+}
+
+.hads-unit-skeleton--text {
+  width: 100%;
+  margin-top: 0.45rem;
+}
+
+.hads-unit-skeleton--text-short {
+  width: 58%;
+}
+
 .start-steps {
   display: grid;
   gap: 1rem;
-  margin: 2rem 0 0;
+  margin: 1rem 0 0;
   padding: 0;
   list-style: none;
 }

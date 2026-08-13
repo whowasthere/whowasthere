@@ -10,6 +10,9 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ "curl -s"
     assert html =~ ~s(id="start")
     assert html =~ ~s(id="start-create")
+    assert html =~ ~s(id="hads-create")
+    assert html =~ ~s(data-hads-slot="create")
+    assert html =~ "https://api.hads.dev/v1/hads.js?site=site_F7v4CJh18Dm4XZnSG64BlX4haf2xAanw"
     assert html =~ ~s(id="start-curl")
     assert html =~ ~s(id="start-snippet")
     assert html =~ "SITE_KEY"
