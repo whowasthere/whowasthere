@@ -104,17 +104,15 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
-            pay_master_key='${{ secrets.PAY_MASTER_KEY }}'
-            if [ -z "$pay_master_key" ]; then
-              echo "PAY_MASTER_KEY production secret is missing"
-              exit 1
-            fi
-            if grep -q '^PAY_MASTER_KEY=' .env; then
-              sed -i "s|^PAY_MASTER_KEY=.*$|PAY_MASTER_KEY=$pay_master_key|" .env
+            echo "Ensuring PAY_MASTER_KEY"
+            if grep -Eq '^PAY_MASTER_KEY=.+$' .env; then
+              echo "PAY_MASTER_KEY is already configured"
             else
+              pay_master_key="$(openssl rand -base64 32 | tr -d '\n')"
               printf '\nPAY_MASTER_KEY=%s\n' "$pay_master_key" >> .env
+              chmod 600 .env
+              echo "PAY_MASTER_KEY generated on the server"
             fi
-            chmod 600 .env
             export IMAGE_TAG="sha-$(echo "${{ github.sha }}" | cut -c1-7)"
             echo "Deploying $IMAGE_TAG"
             echo "$IMAGE_TAG" > .image_tag
