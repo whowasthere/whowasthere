@@ -7,6 +7,18 @@ defmodule WhoWasThereWeb.PageControllerTest do
     host = "#{conn.scheme}://#{conn.host}"
 
     assert html =~ "whowasthere"
+
+    assert html =~
+             ~s(<meta name="description" content="Website analytics with no cookies or raw visit logs — only useful aggregates.">)
+
+    assert html =~ ~s(<meta property="og:site_name" content="Who Was There">)
+
+    assert html =~
+             ~s(<meta property="og:title" content="Who Was There — privacy-first web analytics">)
+
+    assert html =~ ~s(<meta property="og:url" content="#{host}">)
+    assert html =~ ~s(<meta property="og:image" content="#{host}/images/icon-512.png">)
+    assert html =~ ~s(<meta name="twitter:card" content="summary">)
     assert html =~ "curl -s"
     assert html =~ ~s(id="start")
     assert html =~ ~s(id="start-create")

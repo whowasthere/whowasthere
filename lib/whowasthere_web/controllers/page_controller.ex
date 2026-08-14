@@ -7,6 +7,13 @@ defmodule WhoWasThereWeb.PageController do
     render(conn, :home,
       page_title: "who was there",
       base_url: base,
+      open_graph: %{
+        title: "Who Was There — privacy-first web analytics",
+        description:
+          "Website analytics with no cookies or raw visit logs — only useful aggregates.",
+        url: base,
+        image: "#{base}/images/icon-512.png"
+      },
       readme: WhoWasThere.Readme.html(base, omit_intro: true)
     )
   end

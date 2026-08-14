@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <.live_title default="who was there" suffix=" · whowasthere" phx-no-format>{assigns[:page_title]}</.live_title>
+    <%= if open_graph = assigns[:open_graph] do %>
+      <meta name="description" content={open_graph.description} />
+      <meta property="og:site_name" content="Who Was There" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content={open_graph.title} />
+      <meta property="og:description" content={open_graph.description} />
+      <meta property="og:url" content={open_graph.url} />
+      <meta property="og:image" content={open_graph.image} />
+      <meta property="og:image:type" content="image/png" />
+      <meta property="og:image:width" content="512" />
+      <meta property="og:image:height" content="512" />
+      <meta name="twitter:card" content="summary" />
+      <meta name="twitter:title" content={open_graph.title} />
+      <meta name="twitter:description" content={open_graph.description} />
+      <meta name="twitter:image" content={open_graph.image} />
+    <% end %>
     <link rel="icon" href={~p"/favicon.ico"} sizes="any" />
     <link rel="icon" type="image/png" sizes="512x512" href={~p"/images/icon-512.png"} />
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
