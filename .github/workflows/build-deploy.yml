@@ -111,7 +111,10 @@ jobs:
               normalized_pay_master_key="$(docker compose run --rm --no-deps -T \
                 -e PHX_SERVER=false \
                 -e PAY_MASTER_KEY="$pay_master_key" \
-                app bin/whowasthere eval 'key = System.fetch_env!("PAY_MASTER_KEY"); seed = case Base.decode64(key) do {:ok, value} when byte_size(value) == 32 -> value; _ -> {:ok, value} = WhoWasThere.Base58.decode(key); value end; true = byte_size(seed) == 32; IO.write(WhoWasThere.Base58.encode(seed))')"
+                app bin/whowasthere eval 'key = System.fetch_env!("PAY_MASTER_KEY"); seed = case Base.decode64(key) do {:ok, value} when byte_size(value) == 32 -> value; _ -> {:ok, value} = WhoWasThere.Base58.decode(key); value end; true = byte_size(seed) == 32; IO.puts("PAY_MASTER_KEY_BASE58=" <> WhoWasThere.Base58.encode(seed))' \
+                | sed -n 's/^PAY_MASTER_KEY_BASE58=//p' \
+                | tail -n 1)"
+              test -n "$normalized_pay_master_key"
               if [ "$pay_master_key" != "$normalized_pay_master_key" ]; then
                 sed "s|^PAY_MASTER_KEY=.*$|PAY_MASTER_KEY=$normalized_pay_master_key|" .env > .env.next
                 mv .env.next .env
@@ -122,7 +125,10 @@ jobs:
             else
               pay_master_key="$(docker compose run --rm --no-deps -T \
                 -e PHX_SERVER=false \
-                app bin/whowasthere eval 'IO.write(WhoWasThere.Base58.encode(:crypto.strong_rand_bytes(32)))')"
+                app bin/whowasthere eval 'IO.puts("PAY_MASTER_KEY_BASE58=" <> WhoWasThere.Base58.encode(:crypto.strong_rand_bytes(32)))' \
+                | sed -n 's/^PAY_MASTER_KEY_BASE58=//p' \
+                | tail -n 1)"
+              test -n "$pay_master_key"
               printf '\nPAY_MASTER_KEY=%s\n' "$pay_master_key" >> .env
               echo "PAY_MASTER_KEY generated on the server as base58"
             fi
