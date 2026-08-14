@@ -16,11 +16,17 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-curl")
     assert html =~ ~s(id="start-snippet")
     assert html =~ "SITE_KEY"
-    assert html =~ "hosted cloud"
+    assert html =~ "use this instance’s origin"
+    assert html =~ "payment instructions"
+    assert html =~ "This instance uses:"
+    assert html =~ "within the instance that verifies it"
+    assert html =~ "Get the payment wallet from <code>/pay</code> on that same instance"
     assert html =~ ~s(id="self-host")
     assert html =~ "mix phx.server"
     assert html =~ "http://localhost:4000"
     assert html =~ "curl -s #{host}/new"
+    assert html =~ "#{host}/w.js"
+    assert html =~ "#{host}/d/TOKEN"
     refute html =~ "Then open #{host}"
     assert html =~ ~s(href="LICENSE")
   end

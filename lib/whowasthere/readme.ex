@@ -14,6 +14,7 @@ defmodule WhoWasThere.Readme do
       hosted
       |> maybe_omit_intro(Keyword.get(opts, :omit_intro, false))
       |> rewrite_hosted(base)
+      |> maybe_rewrite_home_context(Keyword.get(opts, :omit_intro, false))
 
     (hosted <> self_host)
     |> MDEx.to_html!(extension: [table: true, strikethrough: true, autolink: true])
@@ -41,6 +42,12 @@ defmodule WhoWasThere.Readme do
     |> String.replace("https://YOUR_HOST", base)
     |> String.replace("http://YOUR_HOST", base)
     |> String.replace(@hosted, base)
+  end
+
+  defp maybe_rewrite_home_context(markdown, false), do: markdown
+
+  defp maybe_rewrite_home_context(markdown, true) do
+    String.replace(markdown, "The hosted service uses:", "This instance uses:")
   end
 
   defp anchor_headings(html) do

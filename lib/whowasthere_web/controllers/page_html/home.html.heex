@@ -7,8 +7,8 @@
     <p class="eyebrow">start</p>
     <h1 class="display-title">Who Was There</h1>
     <p class="start-lead">
-      This is the <strong>hosted cloud</strong>. Create a site here, paste the tag, bookmark the
-      dashboard. Seven days free, then <a href="#pricing">$30 USDC / year</a>. Mix and Docker: <a href="#self-host">self-host</a>.
+      The commands, tracker, dashboard, and payment instructions below use this instance’s origin.
+      Create a site, paste the tag, and save its private dashboard link. Seven days free, then <a href="#pricing">$30 USDC / year</a>. For your own deployment, see <a href="#self-host">self-host</a>.
     </p>
 
     <script src="https://api.hads.dev/v1/hads.js?site=site_F7v4CJh18Dm4XZnSG64BlX4haf2xAanw" async>
@@ -20,8 +20,8 @@
         <div>
           <h2>Create a site</h2>
           <p>
-            Same as <code>curl /new</code>. The dashboard URL is only in this response — it is not
-            in the snippet.
+            Same as <code>curl /new</code>. This response contains the only dashboard URL; it is
+            never added to the tracker snippet.
           </p>
           <.copy_block id="start-curl" code={"curl -s #{@base_url}/new"} />
           <button type="button" id="start-create" class="start-go">Create a site</button>
@@ -52,7 +52,7 @@
         <span class="start-n num">03</span>
         <div>
           <h2>Keep the dashboard</h2>
-          <p>Private signed URL. Reading your HTML is not enough to open the stats.</p>
+          <p>Private signed URL. Save it when the site is created.</p>
           <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
           <a
             id="start-dash-open"
@@ -70,26 +70,26 @@
       </li>
     </ol>
   </section>
-    <aside
-      id="hads-create"
-      class="panel hads-unit"
-      data-hads-slot="create"
-      data-hads-topic="web analytics privacy"
-      data-hads-allow-self
-    >
-      <a data-hads-attribution class="hads-unit-attribution">Ads by HADS</a>
-      <strong data-hads-title>
-        <span class="hads-unit-skeleton hads-unit-skeleton--title" aria-hidden="true"></span>
-      </strong>
-      <p data-hads-text>
-        <span class="hads-unit-skeleton hads-unit-skeleton--text" aria-hidden="true"></span>
-        <span
-          class="hads-unit-skeleton hads-unit-skeleton--text hads-unit-skeleton--text-short"
-          aria-hidden="true"
-        ></span>
-      </p>
-      <a data-hads-url></a>
-    </aside>
+  <aside
+    id="hads-create"
+    class="panel hads-unit"
+    data-hads-slot="create"
+    data-hads-topic="web analytics privacy"
+    data-hads-allow-self
+  >
+    <a data-hads-attribution class="hads-unit-attribution">Ads by HADS</a>
+    <strong data-hads-title>
+      <span class="hads-unit-skeleton hads-unit-skeleton--title" aria-hidden="true"></span>
+    </strong>
+    <p data-hads-text>
+      <span class="hads-unit-skeleton hads-unit-skeleton--text" aria-hidden="true"></span>
+      <span
+        class="hads-unit-skeleton hads-unit-skeleton--text hads-unit-skeleton--text-short"
+        aria-hidden="true"
+      ></span>
+    </p>
+    <a data-hads-url></a>
+  </aside>
 
   <article id="readme" class="readme readme-follow">
     {raw(@readme)}

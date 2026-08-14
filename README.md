@@ -6,17 +6,17 @@ There are no accounts. You create a site with one HTTP request, put a script on 
 
 The tracker is about 2 KB and sets no cookies. SQLite keeps only daily aggregates.
 
-**Hosted cloud:** [whowasthere.fyi](https://whowasthere.fyi). **Self-host:** [Self-host](#self-host).
+**Hosted service:** [whowasthere.fyi](https://whowasthere.fyi). **Run your own instance:** [Self-host](#self-host).
 
 ## Create a site
 
-On the hosted cloud:
+Use the origin of the instance that will collect your data. The hosted service uses:
 
 ```bash
 curl -s https://whowasthere.fyi/new
 ```
 
-On your own instance, use that origin instead (`http://localhost:4000` in development).
+On a self-hosted instance, use its public origin instead (`http://localhost:4000` in development).
 
 You get something like:
 
@@ -55,7 +55,7 @@ The dashboard lives at `/d/…`. That token is signed, not stored, and is not in
 
 ## Add the tracker
 
-Put this in `<head>` or before `</body>` (hosted example; on self-host swap in your origin):
+Put this in `<head>` or before `</body>`. The script URL must use the same instance origin as `/new`:
 
 ```html
 <script src="https://whowasthere.fyi/w.js" data-w="SITE_KEY" defer></script>
@@ -94,7 +94,7 @@ Names are trimmed to 40 characters.
 
 ## Dashboard
 
-Open the secret URL from `/new`: `https://whowasthere.fyi/d/TOKEN`.
+Open the secret URL returned by `/new`, for example: `https://whowasthere.fyi/d/TOKEN`.
 
 The public id does not work as a dashboard path. The page updates live. You can switch between today, 7, 30, and 90 days.
 
@@ -128,7 +128,7 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 ## Pricing
 
-**$30 USDC / year** on Solana. One payment covers unlimited sites and a shared **500 000 pageviews / month**. Send more in the same transaction and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew. Same price on the hosted cloud and on a self-hosted copy (you receive the USDC if you set `PAY_WALLET`).
+**$30 USDC / year** on Solana. A payment covers unlimited sites and a shared **500 000 pageviews / month** within the instance that verifies it. Send more in the same transaction and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew. Get the payment wallet from `/pay` on that same instance. For self-hosting, `PAY_WALLET` sets the wallet that receives and verifies those payments.
 
 ```bash
 curl -s https://whowasthere.fyi/pay
@@ -223,7 +223,7 @@ In development the database file is `config/whowasthere_dev.db`.
 | `PHX_HOST` | public hostname |
 | `PORT` | listen port, default `4000` |
 | `POOL_SIZE` | SQLite pool, default `5` |
-| `PAY_WALLET` | Solana address that receives USDC |
+| `PAY_WALLET` | Solana address that receives payments and is used to verify them |
 | `PAY_BYPASS_TXID` | optional; this string is a valid paid `txid` without Solana RPC. Reusable. |
 | `SOLANA_RPC` | optional RPC URL (default public mainnet) |
 | `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
