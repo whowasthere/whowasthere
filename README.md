@@ -132,7 +132,7 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 **$30 USDC / year** on Solana. A payment profile covers unlimited sites and a shared **500 000 pageviews / month**. Send more before settlement and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until the profile is funded again.
 
-The first `/new` response contains a private `pay URL`, a permanent Solana deposit address derived from its `p_SECRET`, and a Solana Pay URI. The homepage turns that URI into a wallet button and QR code after it creates a site. Send USDC to the address, then use **I’ve paid — check**, open the payment URL, or create another site with the same `pay` value. The instance checks the address on demand, sweeps its USDC into `PAY_WALLET`, and activates the profile. Blockchain transaction ids are never credentials.
+The first `/new` response contains a private `pay URL`, a permanent Solana deposit address derived from its `p_SECRET`, and a Solana Pay URI. The homepage turns that URI into a wallet button and QR code after it creates a site; its amount control moves in 30 USDC steps and rebuilds both. Send USDC to the address, then use **I’ve paid — check**, open the payment URL, or create another site with the same `pay` value. The instance checks the address on demand, sweeps its USDC into `PAY_WALLET`, and activates the profile. Blockchain transaction ids are never credentials.
 
 ```bash
 curl -s https://whowasthere.fyi/new

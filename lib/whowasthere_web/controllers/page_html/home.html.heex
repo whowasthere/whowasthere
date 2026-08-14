@@ -95,7 +95,27 @@
               <p>Scan with a Solana Pay wallet</p>
             </div>
             <div class="payment-details">
-              <p id="start-pay-amount" class="payment-amount">30 USDC</p>
+              <p class="start-sub payment-amount-label">Payment amount</p>
+              <div id="start-pay-amount-control" class="payment-amount-control">
+                <button
+                  type="button"
+                  id="start-pay-less"
+                  class="payment-amount-button"
+                  aria-label="Decrease payment by 30 USDC"
+                  disabled
+                >
+                  <.icon name="hero-minus" class="size-4" />
+                </button>
+                <p id="start-pay-amount" class="payment-amount" aria-live="polite">30 USDC</p>
+                <button
+                  type="button"
+                  id="start-pay-more"
+                  class="payment-amount-button"
+                  aria-label="Increase payment by 30 USDC"
+                >
+                  <.icon name="hero-plus" class="size-4" />
+                </button>
+              </div>
               <p id="start-pay-network" class="payment-network">Solana · mainnet-beta</p>
               <p class="start-sub">Permanent deposit address</p>
               <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />

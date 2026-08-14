@@ -99,7 +99,9 @@ const addCopyButtons = () => {
 }
 
 const LAST_SITE = "wwt:last-site"
+const PAYMENT_STEP_USDC = 30
 let lastIssued = null
+let paymentQrRender = 0
 
 const fillCode = (id, text) => {
   const el = document.getElementById(id)
@@ -125,11 +127,31 @@ const paymentStatus = (data, checked = false) => {
 }
 
 const drawPaymentQr = async (canvas, uri) => {
+  const render = ++paymentQrRender
   try {
     const {drawQr} = await import("./qr")
+    if (render !== paymentQrRender) return
     drawQr(canvas, uri)
+    canvas.hidden = false
   } catch {
-    canvas.hidden = true
+    if (render === paymentQrRender) canvas.hidden = true
+  }
+}
+
+const selectedPaymentAmount = data => {
+  const amount = Number(data.selected_amount_usdc || data.amount_usdc)
+  return Number.isSafeInteger(amount) && amount >= PAYMENT_STEP_USDC && amount % PAYMENT_STEP_USDC === 0
+    ? amount
+    : PAYMENT_STEP_USDC
+}
+
+const solanaPayForAmount = (uri, amount) => {
+  try {
+    const payment = new URL(uri)
+    payment.searchParams.set("amount", String(amount))
+    return payment.toString()
+  } catch {
+    return uri
   }
 }
 
@@ -153,22 +175,24 @@ const showIssued = (data, checked = false) => {
   const payLink = document.getElementById("start-pay-open")
   const walletLink = document.getElementById("start-wallet-open")
   const amount = document.getElementById("start-pay-amount")
+  const less = document.getElementById("start-pay-less")
   const network = document.getElementById("start-pay-network")
   const qr = document.getElementById("start-pay-qr")
   if (payment && data.pay_url && data.deposit) {
+    const selectedAmount = selectedPaymentAmount(data)
+    const paymentUri = solanaPayForAmount(data.solana_pay, selectedAmount)
+    lastIssued.selected_amount_usdc = selectedAmount
     payment.hidden = false
     if (paymentEmpty) paymentEmpty.hidden = true
     if (payLink) payLink.href = data.pay_url
-    if (walletLink && data.solana_pay) {
-      walletLink.href = data.solana_pay
+    if (walletLink && paymentUri) {
+      walletLink.href = paymentUri
       walletLink.hidden = false
     }
-    if (amount) amount.textContent = `${data.amount_usdc || 30} USDC`
+    if (amount) amount.textContent = `${selectedAmount} USDC`
+    if (less) less.disabled = selectedAmount === PAYMENT_STEP_USDC
     if (network) network.textContent = `Solana · ${data.network || "mainnet-beta"}`
-    if (qr && data.solana_pay) {
-      qr.hidden = false
-      drawPaymentQr(qr, data.solana_pay)
-    }
+    if (qr && paymentUri) drawPaymentQr(qr, paymentUri)
     paymentStatus(data, checked)
   }
 
@@ -215,6 +239,23 @@ const bootStart = () => {
     } finally {
       createBtn.disabled = false
     }
+  })
+
+  const changePaymentAmount = delta => {
+    if (!lastIssued?.solana_pay) return
+    const current = selectedPaymentAmount(lastIssued)
+    const next = Math.max(PAYMENT_STEP_USDC, current + delta)
+    if (next === current) return
+
+    showIssued({...lastIssued, selected_amount_usdc: next})
+    try { sessionStorage.setItem(LAST_SITE, JSON.stringify(lastIssued)) } catch { /* ignore */ }
+  }
+
+  document.getElementById("start-pay-less")?.addEventListener("click", () => {
+    changePaymentAmount(-PAYMENT_STEP_USDC)
+  })
+  document.getElementById("start-pay-more")?.addEventListener("click", () => {
+    changePaymentAmount(PAYMENT_STEP_USDC)
   })
 
   const checkBtn = document.getElementById("start-pay-check")
