@@ -99,6 +99,7 @@ const addCopyButtons = () => {
 }
 
 const LAST_SITE = "wwt:last-site"
+let lastIssued = null
 
 const fillCode = (id, text) => {
   const el = document.getElementById(id)
@@ -107,7 +108,33 @@ const fillCode = (id, text) => {
   code.textContent = text
 }
 
-const showIssued = (data) => {
+const paymentStatus = (data, checked = false) => {
+  const status = document.getElementById("start-pay-status")
+  if (!status) return
+
+  const until = data.expires ? String(data.expires).slice(0, 10) : ""
+  if (data.plan === "paid" || data.plan === "comp") {
+    status.dataset.state = "paid"
+    status.textContent = `${data.plan} until ${until}`
+  } else {
+    status.dataset.state = "waiting"
+    status.textContent = checked
+      ? "No confirmed payment yet. Try again after the transfer confirms."
+      : `trial until ${until}`
+  }
+}
+
+const drawPaymentQr = async (canvas, uri) => {
+  try {
+    const {drawQr} = await import("./qr")
+    drawQr(canvas, uri)
+  } catch {
+    canvas.hidden = true
+  }
+}
+
+const showIssued = (data, checked = false) => {
+  lastIssued = data
   fillCode("start-snippet", data.snippet)
   fillCode("start-pixel", data.pixel)
   fillCode("start-event", data.event)
@@ -122,10 +149,27 @@ const showIssued = (data) => {
   }
 
   const payment = document.getElementById("start-payment")
+  const paymentEmpty = document.getElementById("start-payment-empty")
   const payLink = document.getElementById("start-pay-open")
+  const walletLink = document.getElementById("start-wallet-open")
+  const amount = document.getElementById("start-pay-amount")
+  const network = document.getElementById("start-pay-network")
+  const qr = document.getElementById("start-pay-qr")
   if (payment && data.pay_url && data.deposit) {
     payment.hidden = false
+    if (paymentEmpty) paymentEmpty.hidden = true
     if (payLink) payLink.href = data.pay_url
+    if (walletLink && data.solana_pay) {
+      walletLink.href = data.solana_pay
+      walletLink.hidden = false
+    }
+    if (amount) amount.textContent = `${data.amount_usdc || 30} USDC`
+    if (network) network.textContent = `Solana · ${data.network || "mainnet-beta"}`
+    if (qr && data.solana_pay) {
+      qr.hidden = false
+      drawPaymentQr(qr, data.solana_pay)
+    }
+    paymentStatus(data, checked)
   }
 
   const meta = document.getElementById("start-meta")
@@ -170,6 +214,36 @@ const bootStart = () => {
       setTimeout(() => (createBtn.textContent = "Create a site"), 1800)
     } finally {
       createBtn.disabled = false
+    }
+  })
+
+  const checkBtn = document.getElementById("start-pay-check")
+  checkBtn?.addEventListener("click", async () => {
+    if (!lastIssued?.pay_url) return
+
+    checkBtn.disabled = true
+    checkBtn.textContent = "checking…"
+    const status = document.getElementById("start-pay-status")
+
+    try {
+      const url = new URL(lastIssued.pay_url, window.location.href)
+      url.searchParams.set("format", "json")
+      const res = await fetch(url, {headers: {Accept: "application/json"}})
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "failed")
+
+      const updated = {...lastIssued, ...data}
+      showIssued(updated, true)
+      try { sessionStorage.setItem(LAST_SITE, JSON.stringify(updated)) } catch { /* ignore */ }
+      checkBtn.textContent = data.plan === "paid" || data.plan === "comp" ? "payment found" : "check again"
+    } catch (error) {
+      if (status) {
+        status.dataset.state = "error"
+        status.textContent = error.message || "Payment check failed."
+      }
+      checkBtn.textContent = "try again"
+    } finally {
+      checkBtn.disabled = false
     }
   })
 }

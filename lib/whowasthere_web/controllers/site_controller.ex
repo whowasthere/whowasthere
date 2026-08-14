@@ -32,6 +32,8 @@ defmodule WhoWasThereWeb.SiteController do
             issued = Stamp.issue(id, host, pay.id)
             base = base_url(conn)
             bill = Billing.status(pay)
+            info = Billing.info()
+            solana_pay = solana_pay_uri(profile.deposit_address, info)
 
             respond(conn, params, %{
               site: id,
@@ -39,6 +41,10 @@ defmodule WhoWasThereWeb.SiteController do
               pay: cap || pay_cap,
               pay_url: "#{base}/pay?pay=#{cap || pay_cap}",
               deposit: profile.deposit_address,
+              amount_usdc: info.amount_usdc,
+              mint: info.mint,
+              network: info.network,
+              solana_pay: solana_pay,
               plan: bill.kind,
               expires: DateTime.to_iso8601(bill.expires_at),
               email: bill.email,
@@ -67,7 +73,9 @@ defmodule WhoWasThereWeb.SiteController do
           pay: params["pay"],
           deposit: profile.deposit_address,
           amount_usdc: info.amount_usdc,
+          mint: info.mint,
           network: info.network,
+          solana_pay: solana_pay_uri(profile.deposit_address, info),
           month_cap: payment.month_cap,
           plan: payment.kind,
           expires: DateTime.to_iso8601(payment.expires_at),
@@ -160,6 +168,7 @@ defmodule WhoWasThereWeb.SiteController do
     pay      #{p.pay}   (#{p.plan}, until #{p.expires})
     pay URL  #{p.pay_url}   ← secret; keep it with the dashboard URL
     deposit  #{p.deposit}   (USDC on Solana)
+    wallet   #{p.solana_pay}
     email    #{p.email || "-"}
     dash     #{p.dash}
     snippet  #{p.snippet}
@@ -173,8 +182,13 @@ defmodule WhoWasThereWeb.SiteController do
     whowasthere
 
     pay      #{pay}
-    #{if Map.has_key?(p, :deposit), do: "send     #{p.amount_usdc} USDC to #{p.deposit}\n", else: ""}#{if Map.has_key?(p, :plan), do: "plan     #{p.plan}\n", else: ""}#{if Map.has_key?(p, :expires), do: "expires  #{p.expires}\n", else: ""}email    #{Map.get(p, :email) || "-"}
+    #{if Map.has_key?(p, :deposit), do: "send     #{p.amount_usdc} USDC to #{p.deposit}\n", else: ""}#{if Map.has_key?(p, :solana_pay), do: "wallet   #{p.solana_pay}\n", else: ""}#{if Map.has_key?(p, :plan), do: "plan     #{p.plan}\n", else: ""}#{if Map.has_key?(p, :expires), do: "expires  #{p.expires}\n", else: ""}email    #{Map.get(p, :email) || "-"}
     """
+  end
+
+  defp solana_pay_uri(deposit, info) do
+    query = URI.encode_query(%{"amount" => info.amount_usdc, "spl-token" => info.mint})
+    "solana:#{deposit}?#{query}"
   end
 
   defp base_url(conn) do

@@ -73,6 +73,19 @@ defmodule WhoWasThere.BillingTest do
     assert status.month_cap == 2_000_000
     assert Billing.allow_pageview?(granted.id)
     assert {:error, :unknown_payment} = Billing.grant("p_not_a_real_profile", years: 10)
+
+    previous = Application.get_env(:whowasthere, :solana_profile_settle)
+
+    Application.put_env(:whowasthere, :solana_profile_settle, fn _, _, _ ->
+      flunk("unexpected settlement")
+    end)
+
+    try do
+      assert {:ok, reused, _profile, nil} = Billing.start_for_profile(cap, nil)
+      assert reused.kind == "comp"
+    after
+      Application.put_env(:whowasthere, :solana_profile_settle, previous)
+    end
   end
 
   test "expiry mail is sent once" do

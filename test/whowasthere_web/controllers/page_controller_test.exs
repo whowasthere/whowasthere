@@ -30,6 +30,12 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-pay")
     assert html =~ ~s(id="start-deposit")
     assert html =~ ~s(id="start-pay-open")
+    assert html =~ ~s(id="start-pay-step")
+    assert html =~ ~s(id="start-pay-qr")
+    assert html =~ ~s(id="start-wallet-open")
+    assert html =~ ~s(id="start-pay-check")
+    assert html =~ ~s(id="start-pay-status")
+    assert html =~ "Pay when you’re ready"
     assert html =~ "SITE_KEY"
     assert html =~ "Privacy-first web analytics"
     assert html =~ "no cookies or raw visit logs"
@@ -41,6 +47,9 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ "private <code>pay URL</code>"
     assert html =~ "Blockchain transaction ids are never credentials"
     assert html =~ ~s(id="self-host")
+    assert html =~ "Free profiles for your own sites"
+    assert html =~ "WhoWasThere.Billing.grant"
+    assert html =~ "analytics.example.com/new?pay=p_SECRET"
     assert html =~ "mix phx.server"
     assert html =~ "http://localhost:4000"
     assert html =~ "curl -s #{host}/new"

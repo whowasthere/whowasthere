@@ -856,3 +856,119 @@ a.chip:hover {
 .start-open[hidden] {
   display: none;
 }
+
+.payment-empty {
+  margin: 0 !important;
+  border: 1px dashed var(--line);
+  border-radius: 0.65rem;
+  padding: 0.9rem 1rem;
+  color: var(--ink-faint) !important;
+}
+
+.payment-card {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  gap: 1.15rem;
+  margin-top: 1rem;
+  border: 1px solid color-mix(in oklab, var(--color-primary) 24%, var(--line));
+  border-radius: 0.85rem;
+  background: color-mix(in oklab, var(--color-primary) 5%, transparent);
+  padding: 1rem;
+}
+
+.payment-card[hidden],
+.payment-empty[hidden] {
+  display: none;
+}
+
+.payment-qr-wrap {
+  align-self: start;
+  border-radius: 0.7rem;
+  background: white;
+  padding: 0.55rem;
+  text-align: center;
+}
+
+.payment-qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.payment-qr-wrap p {
+  margin: 0.4rem 0 0 !important;
+  font-family: var(--mono);
+  font-size: 0.625rem !important;
+  line-height: 1.35 !important;
+  color: #27303e !important;
+}
+
+.payment-details {
+  min-width: 0;
+}
+
+.payment-amount {
+  margin: 0 !important;
+  font-family: var(--mono);
+  font-size: 1.5rem !important;
+  font-weight: 600;
+  line-height: 1.2 !important;
+  color: var(--color-base-content) !important;
+}
+
+.payment-network {
+  margin: 0.25rem 0 0 !important;
+  font-family: var(--mono);
+  font-size: 0.6875rem !important;
+  color: var(--ink-faint) !important;
+}
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.payment-actions .start-open,
+.payment-actions .start-go {
+  margin-top: 0;
+}
+
+.payment-status {
+  min-height: 1.25rem;
+  margin: 0.7rem 0 0 !important;
+  font-family: var(--mono);
+  font-size: 0.6875rem !important;
+  color: var(--ink-faint) !important;
+}
+
+.payment-status[data-state="paid"] {
+  color: var(--color-primary) !important;
+}
+
+.payment-status[data-state="error"] {
+  color: var(--color-error) !important;
+}
+
+.payment-secret {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.15rem;
+}
+
+@media (max-width: 560px) {
+  .payment-card {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-qr-wrap {
+    width: min(13rem, 100%);
+    justify-self: center;
+  }
+
+  .payment-secret {
+    grid-column: auto;
+  }
+}

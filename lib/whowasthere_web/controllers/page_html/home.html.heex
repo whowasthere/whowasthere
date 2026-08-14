@@ -30,21 +30,6 @@
           <p id="start-meta" class="start-meta" hidden>
             site <span data-site class="num"></span> · <span data-plan></span>
           </p>
-          <div id="start-payment" class="mt-5" hidden>
-            <p class="start-sub">Save this private payment URL with the dashboard:</p>
-            <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
-            <p class="start-sub">Permanent USDC deposit address for this payment profile:</p>
-            <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
-            <a
-              id="start-pay-open"
-              class="start-open"
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Open payment profile
-            </a>
-          </div>
         </div>
       </li>
 
@@ -83,6 +68,59 @@
           </a>
           <p class="start-sub">Custom events, after the script:</p>
           <.copy_block id="start-event" code="window.wwt('signup')" />
+        </div>
+      </li>
+
+      <li id="start-pay-step" class="panel start-step">
+        <span class="start-n num">04</span>
+        <div>
+          <h2>Pay when you’re ready</h2>
+          <p>
+            Seven days are free. After that, send 30 USDC on Solana. The address stays with this
+            payment profile and is also used for every renewal.
+          </p>
+          <p id="start-payment-empty" class="payment-empty">
+            Create a site first — its private payment profile will appear here.
+          </p>
+          <div id="start-payment" class="payment-card" hidden>
+            <div class="payment-qr-wrap">
+              <canvas
+                id="start-pay-qr"
+                class="payment-qr"
+                width="424"
+                height="424"
+                role="img"
+                aria-label="Solana Pay QR code"
+              ></canvas>
+              <p>Scan with a Solana Pay wallet</p>
+            </div>
+            <div class="payment-details">
+              <p id="start-pay-amount" class="payment-amount">30 USDC</p>
+              <p id="start-pay-network" class="payment-network">Solana · mainnet-beta</p>
+              <p class="start-sub">Permanent deposit address</p>
+              <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
+              <div class="payment-actions">
+                <a id="start-wallet-open" class="start-open" href="#" hidden>Open wallet</a>
+                <button type="button" id="start-pay-check" class="start-go">
+                  I’ve paid — check
+                </button>
+              </div>
+              <p id="start-pay-status" class="payment-status" aria-live="polite"></p>
+            </div>
+            <div class="payment-secret">
+              <p class="start-sub">Save this private payment URL with the dashboard</p>
+              <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
+              <a
+                id="start-pay-open"
+                class="start-open"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open payment profile
+              </a>
+            </div>
+          </div>
         </div>
       </li>
     </ol>

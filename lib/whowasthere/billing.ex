@@ -526,6 +526,8 @@ defmodule WhoWasThere.Billing do
 
   defp cap_for_usdc(_), do: @month_cap
 
+  defp settle_profile(_profile, %Payment{kind: "comp"} = pay, _cap), do: {:ok, pay}
+
   defp settle_profile(profile, pay, cap) do
     case Solana.settle_profile(cap, profile.deposit_address, @price_usdc) do
       {:ok, amount} when is_integer(amount) and amount >= @price_usdc ->

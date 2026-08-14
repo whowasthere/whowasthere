@@ -23,6 +23,11 @@ defmodule WhoWasThereWeb.IngestControllerTest do
     assert body["pay"] =~ "p_"
     assert body["pay_url"] =~ "/pay?pay="
     assert body["deposit"] =~ ~r/^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+    assert body["amount_usdc"] == 30
+    assert body["network"] == "mainnet-beta"
+    assert body["solana_pay"] =~ "solana:#{body["deposit"]}?"
+    assert body["solana_pay"] =~ "amount=30"
+    assert body["solana_pay"] =~ "spl-token=#{body["mint"]}"
     refute body["key"] =~ body["pay"]
     refute body["snippet"] =~ body["pay"]
     refute body["dash"] =~ "/#{body["site"]}"
@@ -64,6 +69,7 @@ defmodule WhoWasThereWeb.IngestControllerTest do
       assert body["plan"] == "paid"
       assert body["month_cap"] == 1_000_000
       assert body["deposit"] == created["deposit"]
+      assert body["solana_pay"] == created["solana_pay"]
     after
       Application.put_env(:whowasthere, :solana_profile_settle, previous)
     end

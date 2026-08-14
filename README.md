@@ -132,7 +132,7 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 **$30 USDC / year** on Solana. A payment profile covers unlimited sites and a shared **500 000 pageviews / month**. Send more before settlement and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until the profile is funded again.
 
-The first `/new` response contains a private `pay URL` and a permanent Solana deposit address derived from its `p_SECRET`. Send USDC to that address, then open the payment URL or create another site with the same `pay` value. The instance checks the address on demand, sweeps its USDC into `PAY_WALLET`, and activates the profile. Blockchain transaction ids are never credentials.
+The first `/new` response contains a private `pay URL`, a permanent Solana deposit address derived from its `p_SECRET`, and a Solana Pay URI. The homepage turns that URI into a wallet button and QR code after it creates a site. Send USDC to the address, then use **I’ve paid — check**, open the payment URL, or create another site with the same `pay` value. The instance checks the address on demand, sweeps its USDC into `PAY_WALLET`, and activates the profile. Blockchain transaction ids are never credentials.
 
 ```bash
 curl -s https://whowasthere.fyi/new
@@ -141,6 +141,20 @@ curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
 # every later site can share that profile:
 curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 ```
+
+### Renew
+
+The deposit address never changes. Send another 30 USDC to the same address and then check it with either endpoint:
+
+```bash
+curl -s 'https://whowasthere.fyi/renew?pay=p_SECRET'
+# /pay is identical:
+curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
+```
+
+After the sweep is confirmed, one year is added to the current expiry. If the plan has already expired, the new year starts when the payment is settled. Calling either endpoint again with an empty deposit address only returns the current status; it does not extend the plan twice. A larger deposit sets the shared monthly allowance for the renewed plan at 500,000 pageviews for every complete 30 USDC.
+
+There is no background watcher and no transaction id to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` is what checks and settles the address.
 
 Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses Resend when `RESEND_API_KEY` is set.
 
@@ -200,7 +214,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 ## Self-host
 
-You need Elixir 1.17 or newer (1.20 / OTP 29 is what we test on). Mix is enough; SQLite is embedded.
+You need Elixir 1.17 or newer (1.20 / OTP 29 is what we test on). Mix is enough; SQLite is embedded. A self-hosted operator can grant private profiles for their own sites directly from the server console; blockchain payment configuration is only needed when the instance accepts paid profiles from other people.
 
 ```bash
 mix setup
@@ -218,6 +232,48 @@ mix ecto.reset
 In development the database file is `config/whowasthere_dev.db`.
 Development issues deterministic demo deposit addresses and never settles them; do not send funds to those addresses.
 
+### Free profiles for your own sites
+
+Create the first site on your instance and save the returned `p_SECRET`:
+
+```bash
+curl -s 'https://analytics.example.com/new?format=json'
+```
+
+Grant that private payment profile locally. From a source checkout:
+
+```bash
+mix run -e 'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10))'
+```
+
+From a production release:
+
+```bash
+bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10))'
+```
+
+For a release running in Docker, execute the same command inside its container:
+
+```bash
+docker exec CONTAINER bin/whowasthere eval \
+  'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10))'
+```
+
+The profile is stored as `comp`. Use its existing secret for every site that should share the grant:
+
+```bash
+curl -s 'https://analytics.example.com/new?pay=p_SECRET'
+```
+
+The default shared allowance is 500,000 pageviews per month. Set another limit explicitly when needed:
+
+```bash
+bin/whowasthere eval \
+  'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10, month_cap: 2000000))'
+```
+
+Running `grant` again extends an active `comp` profile from its current expiry. `PAY_MASTER_KEY` is still required in production because it derives each profile's stable deposit address; keep it unchanged and backed up. `PAY_WALLET`, a funded fee-payer address, and Solana RPC access are unnecessary when the instance only uses local grants.
+
 ### Production
 
 | Variable | Purpose |
@@ -228,15 +284,16 @@ Development issues deterministic demo deposit addresses and never settles them; 
 | `PHX_HOST` | public hostname |
 | `PORT` | listen port, default `4000` |
 | `POOL_SIZE` | SQLite pool, default `5` |
-| `PAY_WALLET` | treasury owner address; settled USDC is swept to its existing USDC token account |
-| `PAY_MASTER_KEY` | base64 or base58 encoded 32-byte Ed25519 seed for deriving deposit owners and paying sweep fees |
-| `SOLANA_RPC` | optional RPC URL (default public mainnet) |
+| `PAY_MASTER_KEY` | required; base64 or base58 encoded 32-byte Ed25519 seed for stable payment-profile addresses |
+| `PAY_WALLET` | required for paid profiles; treasury owner whose existing USDC token account receives sweeps |
+| `SOLANA_RPC` | used for paid profiles; optional RPC URL (default public mainnet) |
 | `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
 
 ```bash
 docker build -t whowasthere .
 docker run --rm -p 4000:4000 \
   -e SECRET_KEY_BASE=$(mix phx.gen.secret) \
+  -e PAY_MASTER_KEY=BASE64_32_BYTE_SEED \
   -e PHX_HOST=localhost \
   -v wwt-data:/data \
   whowasthere
@@ -251,26 +308,6 @@ bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.Solana.master_address())'
 ```
 
 The payer's wallet creates the derived owner's USDC associated token account on its first transfer. No background chain watcher runs: `/pay?pay=p_SECRET` and `/new?pay=p_SECRET` query that owner, sweep its confirmed USDC balance, wait for the sweep to be confirmed, and only then update the plan. Public transaction ids are never accepted as proof of payment.
-
-### Operator grants
-
-To run your own sites without a blockchain payment, create the first site normally, save its `p_SECRET`, and grant that private profile from the server console:
-
-```bash
-bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10))'
-```
-
-The grant is stored as a `comp` plan. It never creates a public bypass: subsequent sites simply reuse the same private capability.
-
-```bash
-curl -s 'https://whowasthere.fyi/new?pay=p_SECRET'
-```
-
-The default allowance is 500,000 pageviews per month. An operator can set another shared limit explicitly:
-
-```bash
-bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10, month_cap: 2000000))'
-```
 
 ## License
 
