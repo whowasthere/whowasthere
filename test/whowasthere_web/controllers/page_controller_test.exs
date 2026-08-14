@@ -16,6 +16,8 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-curl")
     assert html =~ ~s(id="start-snippet")
     assert html =~ "SITE_KEY"
+    assert html =~ "Privacy-first web analytics"
+    assert html =~ "no cookies or raw visit logs"
     assert html =~ "use this instance’s origin"
     assert html =~ "payment instructions"
     assert html =~ "This instance uses:"
