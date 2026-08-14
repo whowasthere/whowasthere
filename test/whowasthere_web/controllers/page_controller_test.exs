@@ -27,14 +27,19 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ "https://api.hads.dev/v1/hads.js?site=site_F7v4CJh18Dm4XZnSG64BlX4haf2xAanw"
     assert html =~ ~s(id="start-curl")
     assert html =~ ~s(id="start-snippet")
+    assert html =~ ~s(id="start-pay")
+    assert html =~ ~s(id="start-deposit")
+    assert html =~ ~s(id="start-pay-open")
     assert html =~ "SITE_KEY"
     assert html =~ "Privacy-first web analytics"
     assert html =~ "no cookies or raw visit logs"
     assert html =~ "use this instance’s origin"
     assert html =~ "payment instructions"
     assert html =~ "This instance uses:"
-    assert html =~ "within the instance that verifies it"
-    assert html =~ "Get the payment wallet from <code>/pay</code> on that same instance"
+    assert html =~ "One plan for every site in a payment profile"
+    assert html =~ "500,000 pageviews / month"
+    assert html =~ "private <code>pay URL</code>"
+    assert html =~ "Blockchain transaction ids are never credentials"
     assert html =~ ~s(id="self-host")
     assert html =~ "mix phx.server"
     assert html =~ "http://localhost:4000"

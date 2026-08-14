@@ -51,6 +51,8 @@ config :whowasthere, WhoWasThereWeb.Endpoint,
 
 # Enable dev routes for dashboard and mailbox
 config :whowasthere, persist_interval: 5_000
+config :whowasthere, pay_master_key: "11111111111111111111111111111111"
+config :whowasthere, solana_profile_settle: fn _, _, _ -> {:ok, 0} end
 
 config :whowasthere, dev_routes: true
 

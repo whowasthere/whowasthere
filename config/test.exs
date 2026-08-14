@@ -18,9 +18,10 @@ config :whowasthere, WhoWasThereWeb.Endpoint,
   server: false
 
 config :whowasthere, persist_interval: :infinity
-config :whowasthere, solana_verify: :accept_all
 config :whowasthere, mailer: :mailbox
 config :whowasthere, pay_wallet: "Demo111111111111111111111111111111111111111"
+config :whowasthere, pay_master_key: "11111111111111111111111111111111"
+config :whowasthere, solana_profile_settle: fn _, _, _ -> {:ok, 0} end
 
 # Print only warnings and errors during test
 config :logger, level: :warning

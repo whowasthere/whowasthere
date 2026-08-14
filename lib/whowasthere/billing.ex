@@ -3,11 +3,9 @@ defmodule WhoWasThere.Billing do
   Trials, paid USDC years, shared monthly pageview quota, and renewals.
 
   Hot path (allow / record pageviews) uses ETS. SQLite is only touched on
-  create, renew, email changes, and periodic flush.
+  create, settle, email changes, and periodic flush.
   """
-  import Ecto.Query
-
-  alias WhoWasThere.{ID, Mailer, Repo}
+  alias WhoWasThere.{ID, Mailer, PaymentProfile, Repo}
   alias WhoWasThere.Billing.Solana
   alias WhoWasThere.Store.Payment
 
@@ -91,9 +89,6 @@ defmodule WhoWasThere.Billing do
   def get(id) when is_binary(id), do: Repo.get(Payment, id)
   def get(_), do: nil
 
-  def get_by_txid(txid) when is_binary(txid), do: Repo.get_by(Payment, txid: txid)
-  def get_by_txid(_), do: nil
-
   def status(nil), do: nil
 
   def status(%Payment{} = pay) do
@@ -124,7 +119,6 @@ defmodule WhoWasThere.Billing do
       pay = %Payment{
         id: "t_" <> ID.generate_token(),
         kind: "trial",
-        txid: nil,
         email: email,
         expires_at: DateTime.add(now, @trial_days * 86_400, :second),
         month: month_key(now),
@@ -140,156 +134,92 @@ defmodule WhoWasThere.Billing do
     end
   end
 
-  def open_paid(txid, email \\ nil) do
-    with {:ok, email} <- normalize_email(email),
-         {:ok, txid, paid_usdc} <- resolve_payment(txid) do
-      cond do
-        existing = bypass_txid?(txid) && (get(txid) || get_by_txid(txid)) ->
-          {:ok, refresh_paid(existing, email, cap_for_usdc(paid_usdc))}
+  def open_profile(email \\ nil) do
+    with {:ok, pay} <- open_trial(email) do
+      case PaymentProfile.create(pay.id) do
+        {:ok, profile, cap} ->
+          {:ok, pay, profile, cap}
 
-        true ->
-          with :ok <- ensure_fresh_txid(txid) do
-            insert_paid(txid, email, cap_for_usdc(paid_usdc))
-          end
+        {:error, _} = error ->
+          Repo.delete!(pay)
+          error
       end
     end
   end
 
-  def start_for_new(txid, email) do
-    cond do
-      blank?(txid) ->
-        open_trial(email)
+  def start_for_profile(nil, email), do: open_profile(email)
 
-      true ->
-        raw = String.trim(txid)
-        lookup = bypass_lookup(raw)
-
-        case get_by_txid(lookup) || get(lookup) do
-          %Payment{} = pay ->
-            with {:ok, email} <- normalize_email(email) do
-              pay =
-                if bypass_txid?(pay.id) or (is_binary(pay.txid) and bypass_txid?(pay.txid)) do
-                  cap =
-                    case split_bypass(raw) do
-                      {:bypass, _, usdc} -> cap_for_usdc(usdc)
-                      _ -> nil
-                    end
-
-                  refresh_paid(pay, email, cap)
-                else
-                  maybe_set_email(pay, email)
-                end
-
-              {:ok, pay}
-            end
-
-          nil ->
-            open_paid(txid, email)
-        end
-    end
-  end
-
-  def renew(from_id, to_txid, email \\ nil) do
-    with {:ok, email} <- normalize_email(email),
-         {:ok, to_txid, paid_usdc} <- resolve_payment(to_txid),
-         %Payment{} = from <- get(from_id) || get_by_txid(from_id) do
-      {:ok, promote(from, to_txid, email, cap_for_usdc(paid_usdc))}
+  def start_for_profile(cap, email) do
+    with %{payment_id: payment_id} = profile <- PaymentProfile.get_by_cap(cap),
+         %Payment{} = pay <- get(payment_id),
+         {:ok, pay} <- settle_profile(profile, pay, cap),
+         {:ok, email} <- normalize_email(email) do
+      {:ok, maybe_set_email(pay, email), profile, nil}
     else
       nil -> {:error, :unknown_payment}
       other -> other
     end
   end
 
-  # Keep the id already baked into dashboard tokens and ingest keys.
-  # A new txid is stored on that same payment when it is free; otherwise
-  # the existing paid row is only used as a source of expiry.
-  defp promote(from, to_txid, email, month_cap) do
-    existing = get(to_txid) || get_by_txid(to_txid)
+  def payment_profile(cap) do
+    case PaymentProfile.get_by_cap(cap) do
+      %{payment_id: payment_id} = profile ->
+        case get(payment_id) do
+          %Payment{} = pay ->
+            with {:ok, pay} <- settle_profile(profile, pay, cap), do: {:ok, pay, profile}
 
-    cond do
-      from.id == to_txid or from.txid == to_txid ->
-        refresh_paid(from, email)
-
-      match?(%Payment{id: id} when id != from.id, existing) ->
-        other = existing
-        refreshed = refresh_paid(other, email || from.email)
-
-        upgraded =
-          upgrade_in_place(
-            from,
-            to_txid,
-            email || from.email || other.email,
-            refreshed,
-            month_cap
-          )
-
-        reattach_sites(other.id, upgraded.id)
-        upgraded
-
-      true ->
-        case ensure_fresh_txid(to_txid) do
-          :ok -> upgrade_in_place(from, to_txid, email || from.email, nil, month_cap)
-          {:error, :txid_used} -> refresh_paid(from, email)
+          nil ->
+            {:error, :unknown_payment}
         end
+
+      nil ->
+        {:error, :unknown_payment}
     end
   end
 
-  defp insert_paid(txid, email, month_cap) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-    pay = %Payment{
-      id: txid,
-      kind: "paid",
-      txid: txid,
-      email: email,
-      expires_at: DateTime.add(now, @paid_days * 86_400, :second),
-      month: month_key(now),
-      hits_month: 0,
-      month_cap: month_cap,
-      notices: "",
-      created_at: now
-    }
-
-    inserted = Repo.insert!(pay)
-    cache_put(inserted)
-    {:ok, inserted}
+  def set_profile_email(cap, email) do
+    case PaymentProfile.get_by_cap(cap) do
+      %{payment_id: payment_id} -> set_email(payment_id, email)
+      nil -> {:error, :unknown_payment}
+    end
   end
 
-  defp upgrade_in_place(from, to_txid, email, source, month_cap) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-    source_exp = source && source.expires_at
-    from_exp = from.expires_at
+  @doc """
+  Grants a private payment profile without touching the public payment flow.
 
-    base =
-      [source_exp, from_exp, now]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.max(DateTime)
+  Intended for operator use from a release console. The grant starts now for
+  trials and extends the current expiry for an existing paid or comp profile.
+  """
+  def grant(cap, opts \\ []) when is_binary(cap) and is_list(opts) do
+    years = Keyword.get(opts, :years, 1)
+    month_cap = Keyword.get(opts, :month_cap, @month_cap)
 
-    base = if from.kind == "trial", do: now, else: base
-    txid = if txid_free?(to_txid, from.id), do: to_txid, else: from.txid
+    with true <- (is_integer(years) and years in 1..100) || {:error, :bad_grant_years},
+         true <-
+           (is_integer(month_cap) and month_cap > 0) || {:error, :bad_grant_month_cap},
+         %{payment_id: payment_id} <- PaymentProfile.get_by_cap(cap),
+         %Payment{} = pay <- get(payment_id) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    changes = %{
-      kind: "paid",
-      txid: txid,
-      expires_at: DateTime.add(base, @paid_days * 86_400, :second),
-      month_cap: month_cap,
-      notices: drop_expiry_notices(from.notices)
-    }
+      base =
+        if pay.kind in ["paid", "comp"], do: Enum.max([pay.expires_at, now], DateTime), else: now
 
-    changes =
-      if is_binary(email) and email != "", do: Map.put(changes, :email, email), else: changes
+      updated =
+        pay
+        |> Ecto.Changeset.change(%{
+          kind: "comp",
+          expires_at: DateTime.add(base, years * @paid_days * 86_400, :second),
+          month_cap: month_cap,
+          notices: drop_expiry_notices(pay.notices)
+        })
+        |> Repo.update!()
 
-    updated = from |> Ecto.Changeset.change(changes) |> Repo.update!()
-    cache_put(updated)
-    WhoWasThere.Collector.reattach_payment(from.id, updated.id)
-    updated
-  end
-
-  defp txid_free?(txid, keep_id) do
-    case get_by_txid(txid) do
-      nil -> true
-      %{id: ^keep_id} -> true
-      _ -> false
+      cache_put(updated)
+      {:ok, updated}
+    else
+      nil -> {:error, :unknown_payment}
+      false -> {:error, :bad_grant_options}
+      other -> other
     end
   end
 
@@ -318,51 +248,6 @@ defmodule WhoWasThere.Billing do
     end)
   end
 
-  defp refresh_paid(%Payment{} = pay, email, month_cap \\ nil) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-    base = if DateTime.compare(pay.expires_at, now) == :gt, do: pay.expires_at, else: now
-
-    changes = %{
-      kind: "paid",
-      expires_at: DateTime.add(base, @paid_days * 86_400, :second),
-      notices: drop_expiry_notices(pay.notices)
-    }
-
-    changes =
-      cond do
-        bypass_txid?(pay.id) and is_binary(email) and email != "" ->
-          Map.put(changes, :email, email)
-
-        pay.email in [nil, ""] and is_binary(email) and email != "" ->
-          Map.put(changes, :email, email)
-
-        true ->
-          changes
-      end
-
-    changes =
-      if is_integer(month_cap) and month_cap > (pay.month_cap || @month_cap) do
-        Map.put(changes, :month_cap, month_cap)
-      else
-        changes
-      end
-
-    updated = pay |> Ecto.Changeset.change(changes) |> Repo.update!()
-    cache_put(updated)
-    updated
-  end
-
-  defp reattach_sites(from_id, to_id) when from_id == to_id, do: {0, nil}
-
-  defp reattach_sites(from_id, to_id) do
-    result =
-      from(s in WhoWasThere.Store.Site, where: s.payment_id == ^from_id)
-      |> Repo.update_all(set: [payment_id: to_id])
-
-    WhoWasThere.Collector.reattach_payment(from_id, to_id)
-    result
-  end
-
   defp drop_expiry_notices(notices) do
     notices
     |> to_string()
@@ -373,7 +258,7 @@ defmodule WhoWasThere.Billing do
 
   def set_email(payment_id, email) do
     with {:ok, email} <- normalize_email(email),
-         %Payment{} = pay <- get(payment_id) || get_by_txid(payment_id) do
+         %Payment{} = pay <- get(payment_id) do
       if is_nil(email) do
         {:error, :email_required}
       else
@@ -448,7 +333,6 @@ defmodule WhoWasThere.Billing do
     %{
       id: meta.id,
       kind: meta.kind,
-      txid: meta.txid,
       email: meta.email,
       expires_at: meta.expires_at,
       expired?: expired?,
@@ -490,7 +374,6 @@ defmodule WhoWasThere.Billing do
     meta = %{
       id: pay.id,
       kind: pay.kind,
-      txid: pay.txid,
       email: pay.email,
       expires_at: pay.expires_at,
       month: pay.month,
@@ -569,7 +452,7 @@ defmodule WhoWasThere.Billing do
   end
 
   defp expiry_body(meta, kind) do
-    pay_info = info()
+    profile = PaymentProfile.get_by_payment(meta.id)
 
     """
     who was there
@@ -579,13 +462,13 @@ defmodule WhoWasThere.Billing do
     expires  #{DateTime.to_iso8601(meta.expires_at)}
 
     #{case kind do
-      :trial_soon -> "Your 7-day trial ends soon. Send #{@price_usdc} USDC on Solana, then renew."
-      :year_soon -> "Your paid year ends soon. Send #{@price_usdc} USDC on Solana, then renew."
-      :expired -> "This plan has expired. Hits are dropped until you renew."
+      :trial_soon -> "Your 7-day trial ends soon. Fund the payment profile to keep collecting."
+      :year_soon -> "Your paid year ends soon. Fund the payment profile to extend it."
+      :expired -> "This plan has expired. Hits are dropped until the payment profile is funded."
     end}
 
-    wallet   #{pay_info.wallet}
-    renew    curl -s 'https://YOUR_HOST/renew?from=#{meta.id}&to=TXID&email=#{meta.email || ""}'
+    deposit  #{if profile, do: profile.deposit_address, else: "unavailable"}
+    settle   open the private payment URL saved with the dashboard
     """
   end
 
@@ -643,6 +526,38 @@ defmodule WhoWasThere.Billing do
 
   defp cap_for_usdc(_), do: @month_cap
 
+  defp settle_profile(profile, pay, cap) do
+    case Solana.settle_profile(cap, profile.deposit_address, @price_usdc) do
+      {:ok, amount} when is_integer(amount) and amount >= @price_usdc ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        expiry =
+          if pay.kind in ["paid", "comp"],
+            do: Enum.max([pay.expires_at, now], DateTime),
+            else: now
+
+        updated =
+          pay
+          |> Ecto.Changeset.change(%{
+            kind: "paid",
+            expires_at: DateTime.add(expiry, @paid_days * 86_400, :second),
+            month_cap: cap_for_usdc(amount),
+            notices: drop_expiry_notices(pay.notices)
+          })
+          |> Repo.update!()
+
+        PaymentProfile.add_settled(profile, amount)
+        cache_put(updated)
+        {:ok, updated}
+
+      {:ok, _amount} ->
+        {:ok, pay}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
   defp meta_cap(%{month_cap: cap}) when is_integer(cap) and cap > 0, do: cap
   defp meta_cap(_), do: @month_cap
 
@@ -659,100 +574,6 @@ defmodule WhoWasThere.Billing do
     end
   end
 
-  defp ensure_fresh_txid(txid) do
-    if get_by_txid(txid), do: {:error, :txid_used}, else: :ok
-  end
-
-  defp resolve_payment(nil), do: {:error, :txid_required}
-  defp resolve_payment(""), do: {:error, :txid_required}
-
-  defp resolve_payment(txid) do
-    txid = String.trim(txid)
-
-    case split_bypass(txid) do
-      {:bypass, canonical, usdc} ->
-        {:ok, canonical, usdc}
-
-      :invalid ->
-        {:error, :bad_txid}
-
-      :no ->
-        with {:ok, txid} <- normalize_chain_txid(txid),
-             {:ok, paid_usdc} <- Solana.verify_usdc_payment(txid, wallet(), @price_usdc) do
-          {:ok, txid, paid_usdc}
-        end
-    end
-  end
-
-  defp normalize_chain_txid(txid) do
-    if String.length(txid) in 64..128 and txid =~ ~r/^[1-9A-HJ-NP-Za-km-z]+$/ do
-      {:ok, txid}
-    else
-      {:error, :bad_txid}
-    end
-  end
-
-  defp bypass_lookup(txid) do
-    case split_bypass(txid) do
-      {:bypass, canonical, _} -> canonical
-      _ -> txid
-    end
-  end
-
-  @bypass_usdc_max 30_000
-
-  defp split_bypass(txid) when is_binary(txid) do
-    case Application.get_env(:whowasthere, :pay_bypass_txid) do
-      bypass when is_binary(bypass) and bypass != "" ->
-        cond do
-          byte_size(bypass) == byte_size(txid) and Plug.Crypto.secure_compare(bypass, txid) ->
-            {:bypass, bypass, @price_usdc}
-
-          byte_size(txid) > byte_size(bypass) + 1 ->
-            prefix = binary_part(txid, 0, byte_size(bypass))
-            rest = binary_part(txid, byte_size(bypass), byte_size(txid) - byte_size(bypass))
-
-            if Plug.Crypto.secure_compare(prefix, bypass) do
-              parse_bypass_usdc(bypass, rest)
-            else
-              :no
-            end
-
-          true ->
-            :no
-        end
-
-      _ ->
-        :no
-    end
-  end
-
-  defp split_bypass(_), do: :no
-
-  defp parse_bypass_usdc(canonical, ":" <> suffix) do
-    case Integer.parse(suffix) do
-      {n, ""} when n >= @price_usdc and n <= @bypass_usdc_max ->
-        {:bypass, canonical, n}
-
-      _ ->
-        :invalid
-    end
-  end
-
-  defp parse_bypass_usdc(_, _), do: :no
-
-  defp bypass_txid?(txid) when is_binary(txid) do
-    case Application.get_env(:whowasthere, :pay_bypass_txid) do
-      bypass when is_binary(bypass) and bypass != "" ->
-        byte_size(bypass) == byte_size(txid) and Plug.Crypto.secure_compare(bypass, txid)
-
-      _ ->
-        false
-    end
-  end
-
-  defp bypass_txid?(_), do: false
-
   defp normalize_email(nil), do: {:ok, nil}
   defp normalize_email(""), do: {:ok, nil}
 
@@ -765,6 +586,4 @@ defmodule WhoWasThere.Billing do
       {:error, :bad_email}
     end
   end
-
-  defp blank?(v), do: v in [nil, ""]
 end

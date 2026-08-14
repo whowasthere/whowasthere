@@ -1,9 +1,7 @@
 defmodule WhoWasThere.BillingTest do
   use WhoWasThere.DataCase
 
-  alias WhoWasThere.Billing
-
-  @txid "5VEJv7RQxbjLHeGSNVTBnrDWRwDx5PhHQSX8dP1d3R1b9Y8uGvK2nM4pQ6sTAwX3zA7cF9hJ1kL5nP8rT2vY4"
+  alias WhoWasThere.{Billing, PaymentProfile}
 
   setup do
     Application.put_env(:whowasthere, :mailbox, [])
@@ -21,56 +19,12 @@ defmodule WhoWasThere.BillingTest do
     assert Billing.allow_pageview?(pay.id)
   end
 
-  test "paid txid can be shared by many sites and renewed" do
-    assert {:ok, pay} = Billing.open_paid(@txid, "a@b.co")
-    assert pay.id == @txid
-
-    assert {:ok, same} = Billing.start_for_new(@txid, nil)
-    assert same.id == pay.id
-
-    new_txid = String.replace_suffix(@txid, "vY4", "vZ9")
-    assert {:ok, renewed} = Billing.renew(pay.id, new_txid, "a@b.co")
-    assert renewed.kind == "paid"
-    assert renewed.id == pay.id
-    assert renewed.txid == new_txid
-  end
-
-  test "PAY_BYPASS_TXID skips chain verification" do
-    bypass = "bypass-token-for-tests-only"
-    previous = Application.get_env(:whowasthere, :pay_bypass_txid)
-    previous_verify = Application.get_env(:whowasthere, :solana_verify)
-
-    Application.put_env(:whowasthere, :pay_bypass_txid, bypass)
-
-    Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:error, :should_not_call} end)
-
-    try do
-      assert {:ok, pay} = Billing.open_paid(bypass, "ops@example.com")
-      assert pay.id == bypass
-      assert pay.kind == "paid"
-
-      assert {:ok, again} = Billing.open_paid(bypass, "ops@example.com")
-      assert again.id == pay.id
-
-      assert {:ok, trial} = Billing.open_trial("ops@example.com")
-      assert {:ok, renewed} = Billing.renew(trial.id, bypass, "ops@example.com")
-      assert renewed.id == trial.id
-      assert renewed.kind == "paid"
-      assert Billing.status(trial.id).kind == "paid"
-      assert Billing.status(pay.id).month_cap == Billing.month_cap()
-
-      assert {:ok, bumped} = Billing.open_paid(bypass <> ":90", "ops@example.com")
-      assert bumped.id == pay.id
-      assert Billing.status(bumped).month_cap == Billing.month_cap() * 3
-
-      assert {:ok, same} = Billing.open_paid(bypass, "ops@example.com")
-      assert Billing.status(same).month_cap == Billing.month_cap() * 3
-
-      assert {:error, :bad_txid} = Billing.open_paid(bypass <> ":12", nil)
-    after
-      Application.put_env(:whowasthere, :pay_bypass_txid, previous)
-      Application.put_env(:whowasthere, :solana_verify, previous_verify)
-    end
+  test "a private capability resolves one stable payment profile" do
+    assert {:ok, pay, profile, cap} = Billing.open_profile("ops@example.com")
+    assert cap =~ "p_"
+    assert PaymentProfile.get_by_cap(cap).id == profile.id
+    assert profile.payment_id == pay.id
+    assert profile.deposit_address =~ ~r/^[1-9A-HJ-NP-Za-km-z]{32,44}$/
   end
 
   test "quota blocks pageviews after the monthly cap" do
@@ -79,7 +33,6 @@ defmodule WhoWasThere.BillingTest do
     meta = %{
       id: pay.id,
       kind: pay.kind,
-      txid: nil,
       email: nil,
       expires_at: pay.expires_at,
       month: pay.month,
@@ -92,66 +45,34 @@ defmodule WhoWasThere.BillingTest do
     refute Billing.allow_pageview?(pay.id)
   end
 
-  test "USDC above 30 raises the monthly pageview cap in 500k steps" do
-    previous = Application.get_env(:whowasthere, :solana_verify)
+  test "settling 90 USDC activates the profile with three quota units" do
+    previous = Application.get_env(:whowasthere, :solana_profile_settle)
+    Application.put_env(:whowasthere, :solana_profile_settle, fn _, _, _ -> {:ok, 90} end)
 
     try do
-      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 90} end)
-      assert {:ok, pay90} = Billing.open_paid(@txid, "a@b.co")
-      assert Billing.status(pay90).month_cap == Billing.month_cap() * 3
-
-      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 45} end)
-      tx45 = String.replace_suffix(@txid, "vY4", "vY5")
-      assert {:ok, pay45} = Billing.open_paid(tx45, "a@b.co")
-      assert Billing.status(pay45).month_cap == Billing.month_cap()
-
-      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 60} end)
-      tx60 = String.replace_suffix(@txid, "vY4", "vY6")
-      assert {:ok, pay60} = Billing.open_paid(tx60, "a@b.co")
-      assert Billing.status(pay60).month_cap == Billing.month_cap() * 2
-
-      cap = Billing.status(pay60).month_cap
-
-      :ets.insert(
-        :wwt_pay,
-        {pay60.id,
-         %{
-           id: pay60.id,
-           kind: pay60.kind,
-           txid: pay60.txid,
-           email: pay60.email,
-           expires_at: pay60.expires_at,
-           month: pay60.month,
-           hits_month: cap - 1,
-           month_cap: cap,
-           notices: "",
-           dirty: true
-         }}
-      )
-
-      assert Billing.allow_pageview?(pay60.id)
-      Billing.record_pageview(pay60.id)
-      refute Billing.allow_pageview?(pay60.id)
+      assert {:ok, _pay, _profile, cap} = Billing.open_profile("a@b.co")
+      assert {:ok, paid, settled_profile} = Billing.payment_profile(cap)
+      assert paid.kind == "paid"
+      assert paid.month_cap == Billing.month_cap() * 3
+      assert PaymentProfile.get_by_cap(cap).settled_usdc == 90
+      assert settled_profile.payment_id == paid.id
     after
-      Application.put_env(:whowasthere, :solana_verify, previous)
+      Application.put_env(:whowasthere, :solana_profile_settle, previous)
     end
   end
 
-  test "renew with a larger payment raises the cap" do
-    previous = Application.get_env(:whowasthere, :solana_verify)
+  test "an operator grant activates a private profile without a payment" do
+    assert {:ok, pay, _profile, cap} = Billing.open_profile("owner@example.com")
+    assert pay.kind == "trial"
 
-    try do
-      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 30} end)
-      assert {:ok, pay} = Billing.open_paid(@txid, "a@b.co")
-      assert Billing.status(pay).month_cap == Billing.month_cap()
+    assert {:ok, granted} = Billing.grant(cap, years: 10, month_cap: 2_000_000)
+    status = Billing.status(granted)
 
-      Application.put_env(:whowasthere, :solana_verify, fn _, _, _ -> {:ok, 60} end)
-      new_txid = String.replace_suffix(@txid, "vY4", "vZ8")
-      assert {:ok, renewed} = Billing.renew(pay.id, new_txid, "a@b.co")
-      assert Billing.status(renewed).month_cap == Billing.month_cap() * 2
-    after
-      Application.put_env(:whowasthere, :solana_verify, previous)
-    end
+    assert status.kind == "comp"
+    assert status.days_left in 3649..3650
+    assert status.month_cap == 2_000_000
+    assert Billing.allow_pageview?(granted.id)
+    assert {:error, :unknown_payment} = Billing.grant("p_not_a_real_profile", years: 10)
   end
 
   test "expiry mail is sent once" do
@@ -165,7 +86,6 @@ defmodule WhoWasThere.BillingTest do
        %{
          id: pay.id,
          kind: pay.kind,
-         txid: nil,
          email: "ops@example.com",
          expires_at: past,
          month: pay.month,

@@ -30,6 +30,21 @@
           <p id="start-meta" class="start-meta" hidden>
             site <span data-site class="num"></span> · <span data-plan></span>
           </p>
+          <div id="start-payment" class="mt-5" hidden>
+            <p class="start-sub">Save this private payment URL with the dashboard:</p>
+            <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
+            <p class="start-sub">Permanent USDC deposit address for this payment profile:</p>
+            <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
+            <a
+              id="start-pay-open"
+              class="start-open"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open payment profile
+            </a>
+          </div>
         </div>
       </li>
 
@@ -92,6 +107,41 @@
     </p>
     <a data-hads-url></a>
   </aside>
+
+  <section id="pricing" class="mt-14 scroll-mt-24 sm:mt-20">
+    <p class="eyebrow">pricing</p>
+    <div class="panel mt-4 overflow-hidden">
+      <div class="border-b border-base-content/8 px-6 py-7 sm:px-8">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm text-base-content/55">
+              One plan for every site in a payment profile
+            </p>
+            <p class="mt-2 font-mono text-4xl font-medium tracking-tighter sm:text-5xl">
+              30 <span class="text-xl text-primary sm:text-2xl">USDC / year</span>
+            </p>
+          </div>
+          <p class="max-w-xs text-sm leading-relaxed text-base-content/55">
+            Seven days free. Payments run on Solana and settle only when you use your private payment URL.
+          </p>
+        </div>
+      </div>
+      <div class="grid divide-y divide-base-content/8 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div class="px-6 py-5 sm:px-8">
+          <p class="eyebrow">sites</p>
+          <p class="mt-2 text-sm">Unlimited</p>
+        </div>
+        <div class="px-6 py-5 sm:px-8">
+          <p class="eyebrow">included</p>
+          <p class="mt-2 text-sm">500,000 pageviews / month</p>
+        </div>
+        <div class="px-6 py-5 sm:px-8">
+          <p class="eyebrow">scale</p>
+          <p class="mt-2 text-sm">+500,000 for each extra 30 USDC</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <article id="readme" class="readme readme-follow">
     {raw(@readme)}

@@ -112,11 +112,20 @@ const showIssued = (data) => {
   fillCode("start-pixel", data.pixel)
   fillCode("start-event", data.event)
   fillCode("start-dash", data.dash)
+  fillCode("start-pay", data.pay_url)
+  fillCode("start-deposit", data.deposit)
 
   const link = document.getElementById("start-dash-open")
   if (link && data.dash) {
     link.href = data.dash
     link.hidden = false
+  }
+
+  const payment = document.getElementById("start-payment")
+  const payLink = document.getElementById("start-pay-open")
+  if (payment && data.pay_url && data.deposit) {
+    payment.hidden = false
+    if (payLink) payLink.href = data.pay_url
   }
 
   const meta = document.getElementById("start-meta")
@@ -215,4 +224,3 @@ if (process.env.NODE_ENV === "development") {
     window.liveReloader = reloader
   })
 }
-

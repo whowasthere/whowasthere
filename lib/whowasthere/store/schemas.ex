@@ -16,7 +16,6 @@ defmodule WhoWasThere.Store.Payment do
   @primary_key {:id, :string, autogenerate: false}
   schema "payments" do
     field :kind, :string
-    field :txid, :string
     field :email, :string
     field :expires_at, :utc_datetime
     field :month, :string

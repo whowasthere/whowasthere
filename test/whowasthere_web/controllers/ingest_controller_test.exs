@@ -20,9 +20,53 @@ defmodule WhoWasThereWeb.IngestControllerTest do
     assert body["snippet"] =~ "data-w=\"#{body["key"]}\""
     refute body["snippet"] =~ "t.js"
     assert body["dash"] =~ "/d/"
+    assert body["pay"] =~ "p_"
+    assert body["pay_url"] =~ "/pay?pay="
+    assert body["deposit"] =~ ~r/^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+    refute body["key"] =~ body["pay"]
+    refute body["snippet"] =~ body["pay"]
     refute body["dash"] =~ "/#{body["site"]}"
     refute body["snippet"] =~ "/d/"
     assert Store.get_site(body["site"]) == nil
+  end
+
+  test "payment profiles are private capabilities and txid is ignored", %{conn: conn} do
+    first = conn |> get(~p"/new?txid=PUBLIC_BLOCKCHAIN_TX&format=json") |> json_response(200)
+
+    assert first["plan"] == "trial"
+    assert first["pay"] =~ "p_"
+
+    unknown = get(recycle(conn), ~p"/pay?pay=p_not_a_real_profile&format=json")
+    assert json_response(unknown, 404)["error"] == "unknown payment"
+  end
+
+  test "the same payment capability keeps its deposit address", %{conn: conn} do
+    first = conn |> get(~p"/new?format=json") |> json_response(200)
+
+    second =
+      recycle(conn)
+      |> get("/new?pay=#{first["pay"]}&format=json")
+      |> json_response(200)
+
+    assert second["pay"] == first["pay"]
+    assert second["deposit"] == first["deposit"]
+  end
+
+  test "using a funded payment profile settles it and raises its cap", %{conn: conn} do
+    previous = Application.get_env(:whowasthere, :solana_profile_settle)
+    Application.put_env(:whowasthere, :solana_profile_settle, fn _, _, _ -> {:ok, 60} end)
+
+    try do
+      created = conn |> get(~p"/new?format=json") |> json_response(200)
+      settled = get(recycle(conn), "/pay?pay=#{created["pay"]}&format=json")
+      body = json_response(settled, 200)
+
+      assert body["plan"] == "paid"
+      assert body["month_cap"] == 1_000_000
+      assert body["deposit"] == created["deposit"]
+    after
+      Application.put_env(:whowasthere, :solana_profile_settle, previous)
+    end
   end
 
   test "GET /new accepts application/json", %{conn: conn} do

@@ -71,8 +71,8 @@ if config_env() == :prod do
     config :whowasthere, pay_wallet: wallet
   end
 
-  if bypass = System.get_env("PAY_BYPASS_TXID") do
-    config :whowasthere, pay_bypass_txid: bypass
+  if master_key = System.get_env("PAY_MASTER_KEY") do
+    config :whowasthere, pay_master_key: master_key
   end
 
   if rpc = System.get_env("SOLANA_RPC") do

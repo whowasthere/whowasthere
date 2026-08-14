@@ -13,10 +13,10 @@ config :whowasthere,
   generators: [timestamp_type: :utc_datetime],
   persist_interval: 15_000,
   pay_wallet: "PAY_WALLET_NOT_SET",
+  pay_master_key: nil,
   usdc_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   solana_network: "mainnet-beta",
   solana_rpc: "https://api.mainnet-beta.solana.com",
-  solana_verify: :rpc,
   mailer: :log,
   mail_from: "Who Was There <noreply@whowasthere.dev>"
 

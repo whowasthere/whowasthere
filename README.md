@@ -27,7 +27,9 @@ site     k4m2xq9p
 dash     https://whowasthere.fyi/d/SFMyNTY.…   ← secret; do not put this on the site
 snippet  <script src="https://whowasthere.fyi/w.js" data-w="k4m2xq9p.n4m2xq9p.t_….mac" defer></script>
 pixel    <img src="https://whowasthere.fyi/w.js?s=k4m2xq9p.n4m2xq9p.t_….mac" alt="" width="1" height="1">
-pay      t_…   (trial, until …)
+pay      p_…   ← secret payment profile; keep it with the dashboard URL
+pay URL  https://whowasthere.fyi/pay?pay=p_…
+deposit  8x…   (USDC on Solana)
 event    window.wwt('signup')
 ```
 
@@ -38,16 +40,16 @@ curl -sH 'Accept: application/json' https://whowasthere.fyi/new
 curl -s 'https://whowasthere.fyi/new?format=json'
 ```
 
-You can pick the public id, lock the site to a host, attach a paid txid, and leave an email for reminders:
+You can pick the public id, lock the site to a host, reuse a private payment profile, and leave an email for reminders:
 
 ```bash
 curl -s 'https://whowasthere.fyi/new?id=my-blog&host=example.com'
-curl -s 'https://whowasthere.fyi/new?txid=SOLANA_TXID&email=you@example.com'
+curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 ```
 
 The public `id` is 8–32 characters (`a-z`, `0-9`, `_`, `-`). It appears in the snippet as the first part of `data-w`. If that id already has a visit, `/new?id=` returns 409.
 
-`/new` signs an ingest key (`id.nonce.payment.mac`) and a dashboard token with the server secret. Without `txid` it opens a **7-day trial**. Looping on `/new` only burns CPU until the first real visit creates the SQLite row. Hits whose `data-w` is missing or forged are ignored.
+`/new` signs an ingest key (`id.nonce.payment.mac`) and a dashboard token with the server secret. Without `pay` it creates a private payment profile and opens a **7-day trial**. Save both secret URLs from the response; every call without `pay` creates another profile. Hits whose `data-w` is missing or forged are ignored.
 
 `host` is optional. If you pass it, it is baked into the ingest key and other origins never count. If you omit it, the first real visit stores the hostname and later hits from other origins are ignored.
 
@@ -126,28 +128,30 @@ SQLite holds `sites`, `days`, `dims`, and `hours` — aggregates only, typically
 
 The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Later events from another origin are ignored. The collector still responds 204.
 
-## Pricing
+## Payment details
 
-**$30 USDC / year** on Solana. A payment covers unlimited sites and a shared **500 000 pageviews / month** within the instance that verifies it. Send more in the same transaction and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you renew. Get the payment wallet from `/pay` on that same instance. For self-hosting, `PAY_WALLET` sets the wallet that receives and verifies those payments.
+**$30 USDC / year** on Solana. A payment profile covers unlimited sites and a shared **500 000 pageviews / month**. Send more before settlement and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until the profile is funded again.
+
+The first `/new` response contains a private `pay URL` and a permanent Solana deposit address derived from its `p_SECRET`. Send USDC to that address, then open the payment URL or create another site with the same `pay` value. The instance checks the address on demand, sweeps its USDC into `PAY_WALLET`, and activates the profile. Blockchain transaction ids are never credentials.
 
 ```bash
-curl -s https://whowasthere.fyi/pay
-# send 30 USDC to the wallet shown, then:
-curl -s 'https://whowasthere.fyi/new?txid=YOUR_TXID&email=you@example.com'
-# or move every site from an old payment onto a new tx:
-curl -s 'https://whowasthere.fyi/renew?from=OLD_PAY_OR_TXID&to=NEW_TXID&email=you@example.com'
+curl -s https://whowasthere.fyi/new
+# save p_SECRET and the payment URL from the response; send 30 USDC to its deposit address, then:
+curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
+# every later site can share that profile:
+curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 ```
 
-Email is optional. If you set one (`/new?email=`, `/renew?email=`, or `/notify?pay=&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses Resend when `RESEND_API_KEY` is set.
+Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses Resend when `RESEND_API_KEY` is set.
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/new` | create a site (7-day trial) |
-| `GET` | `/new?id=&host=&txid=&email=&format=json` | same, with options |
-| `GET` | `/pay` | wallet, price, example curls |
-| `GET` | `/renew?from=&to=&email=` | reattach all sites to a new paid year |
+| `GET` | `/new?id=&host=&pay=&email=&format=json` | same, optionally using a private payment profile |
+| `GET` | `/pay?pay=p_SECRET` | settle deposits and show payment status |
+| `GET` | `/renew?pay=p_SECRET` | alias for `/pay` |
 | `GET` | `/notify?pay=&email=` | set reminder email |
 | `GET` | `/w.js` | tracker |
 | `POST` | `/w.js` | event (`text/plain` JSON) |
@@ -212,6 +216,7 @@ mix ecto.reset
 ```
 
 In development the database file is `config/whowasthere_dev.db`.
+Development issues deterministic demo deposit addresses and never settles them; do not send funds to those addresses.
 
 ### Production
 
@@ -223,8 +228,8 @@ In development the database file is `config/whowasthere_dev.db`.
 | `PHX_HOST` | public hostname |
 | `PORT` | listen port, default `4000` |
 | `POOL_SIZE` | SQLite pool, default `5` |
-| `PAY_WALLET` | Solana address that receives payments and is used to verify them |
-| `PAY_BYPASS_TXID` | optional; this string is a valid paid `txid` without Solana RPC. Reusable. |
+| `PAY_WALLET` | treasury owner address; settled USDC is swept to its existing USDC token account |
+| `PAY_MASTER_KEY` | base64 or base58 encoded 32-byte Ed25519 seed for deriving deposit owners and paying sweep fees |
 | `SOLANA_RPC` | optional RPC URL (default public mainnet) |
 | `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
 
@@ -239,13 +244,32 @@ docker run --rm -p 4000:4000 \
 
 Or use the included `compose.yml`. Behind TLS, send `X-Forwarded-Proto`. `/health` is excluded from the HTTPS redirect. Releases run migrations on boot.
 
-`PAY_BYPASS_TXID` is accepted as `txid` on `/new` and as `to` on `/renew`. Chain lookup is skipped, and the same value can be reused. Append `:USDC` to pretend a larger payment and raise the monthly cap (500 000 pageviews per $30, same as a real transfer):
+Generate `PAY_MASTER_KEY` once (`openssl rand -base64 32`), back it up, and keep a small SOL balance on its public address for sweep fees. `PAY_WALLET` can remain a separate treasury whose private key is kept offline. To print the fee-payer address from a configured release:
 
 ```bash
-export PAY_BYPASS_TXID=dev-paid
-curl -s 'http://localhost:4000/new?txid=dev-paid'
-curl -s 'http://localhost:4000/new?txid=dev-paid:90'   # 1 500 000 pageviews / month
-curl -s 'http://localhost:4000/renew?from=OLD_PAY&to=dev-paid:60'
+bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.Solana.master_address())'
+```
+
+The payer's wallet creates the derived owner's USDC associated token account on its first transfer. No background chain watcher runs: `/pay?pay=p_SECRET` and `/new?pay=p_SECRET` query that owner, sweep its confirmed USDC balance, wait for the sweep to be confirmed, and only then update the plan. Public transaction ids are never accepted as proof of payment.
+
+### Operator grants
+
+To run your own sites without a blockchain payment, create the first site normally, save its `p_SECRET`, and grant that private profile from the server console:
+
+```bash
+bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10))'
+```
+
+The grant is stored as a `comp` plan. It never creates a public bypass: subsequent sites simply reuse the same private capability.
+
+```bash
+curl -s 'https://whowasthere.fyi/new?pay=p_SECRET'
+```
+
+The default allowance is 500,000 pageviews per month. An operator can set another shared limit explicitly:
+
+```bash
+bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.grant("p_SECRET", years: 10, month_cap: 2000000))'
 ```
 
 ## License

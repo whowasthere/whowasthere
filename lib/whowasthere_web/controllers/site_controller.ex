@@ -6,7 +6,7 @@ defmodule WhoWasThereWeb.SiteController do
   def create(conn, params) do
     wanted = params |> Map.get("id", "") |> String.trim()
     email = params["email"]
-    txid = params["txid"]
+    pay_cap = params["pay"]
 
     host =
       params
@@ -26,8 +26,8 @@ defmodule WhoWasThereWeb.SiteController do
         |> respond(params, %{error: "id is taken, pick another"})
 
       true ->
-        case Billing.start_for_new(txid, email) do
-          {:ok, pay} ->
+        case Billing.start_for_profile(pay_cap, email) do
+          {:ok, pay, profile, cap} ->
             id = if wanted != "", do: wanted, else: unique_id()
             issued = Stamp.issue(id, host, pay.id)
             base = base_url(conn)
@@ -36,7 +36,9 @@ defmodule WhoWasThereWeb.SiteController do
             respond(conn, params, %{
               site: id,
               key: issued.key,
-              pay: pay.id,
+              pay: cap || pay_cap,
+              pay_url: "#{base}/pay?pay=#{cap || pay_cap}",
+              deposit: profile.deposit_address,
               plan: bill.kind,
               expires: DateTime.to_iso8601(bill.expires_at),
               email: bill.email,
@@ -55,55 +57,41 @@ defmodule WhoWasThereWeb.SiteController do
   end
 
   def pay(conn, params) do
-    info = Billing.info()
     base = base_url(conn)
 
-    respond(conn, params, %{
-      wallet: info.wallet,
-      mint: info.mint,
-      amount_usdc: info.amount_usdc,
-      network: info.network,
-      month_cap: info.month_cap,
-      trial_days: info.trial_days,
-      paid_days: info.paid_days,
-      new: "#{base}/new?txid=TXID&email=you@example.com",
-      renew: "#{base}/renew?from=PAY_OR_TXID&to=NEW_TXID&email=you@example.com",
-      notify: "#{base}/notify?pay=PAY_OR_TXID&email=you@example.com"
-    })
-  end
-
-  def renew(conn, params) do
-    from = params["from"] || params["pay"]
-    to = params["to"] || params["txid"]
-    email = params["email"]
-
-    case Billing.renew(from, to, email) do
-      {:ok, pay} ->
-        bill = Billing.status(pay)
+    case Billing.payment_profile(params["pay"]) do
+      {:ok, payment, profile} ->
+        info = Billing.info()
 
         respond(conn, params, %{
-          pay: pay.id,
-          plan: bill.kind,
-          expires: DateTime.to_iso8601(bill.expires_at),
-          email: bill.email,
-          hits_month: bill.hits_month,
-          month_cap: bill.month_cap
+          pay: params["pay"],
+          deposit: profile.deposit_address,
+          amount_usdc: info.amount_usdc,
+          network: info.network,
+          month_cap: payment.month_cap,
+          plan: payment.kind,
+          expires: DateTime.to_iso8601(payment.expires_at),
+          email: payment.email,
+          new: "#{base}/new?pay=#{params["pay"]}",
+          notify: "#{base}/notify?pay=#{params["pay"]}&email=you@example.com"
         })
 
       {:error, reason} ->
-        conn
-        |> put_status(status_for(reason))
-        |> respond(params, %{error: error_text(reason)})
+        conn |> put_status(status_for(reason)) |> respond(params, %{error: error_text(reason)})
     end
   end
 
+  def renew(conn, params) do
+    pay(conn, params)
+  end
+
   def notify(conn, params) do
-    pay = params["pay"] || params["from"] || params["txid"]
+    pay = params["pay"]
     email = params["email"]
 
-    case Billing.set_email(pay, email) do
+    case Billing.set_profile_email(pay, email) do
       {:ok, payment} ->
-        respond(conn, params, %{pay: payment.id, email: payment.email})
+        respond(conn, params, %{pay: pay, email: payment.email})
 
       {:error, reason} ->
         conn
@@ -121,25 +109,25 @@ defmodule WhoWasThereWeb.SiteController do
     if Collector.site?(id) || Store.get_site(id), do: unique_id(), else: id
   end
 
-  defp status_for(:txid_used), do: 409
   defp status_for(:unknown_payment), do: 404
-  defp status_for(:tx_not_found), do: 402
-  defp status_for(:amount_too_low), do: 402
   defp status_for(:tx_failed), do: 402
-  defp status_for(:bad_txid), do: 400
+  defp status_for(:pay_master_key_missing), do: 503
+  defp status_for(:bad_pay_master_key), do: 503
+  defp status_for(:treasury_token_account_missing), do: 503
+  defp status_for(:sweep_confirmation_timeout), do: 504
+  defp status_for({:rpc, _}), do: 502
+  defp status_for({:rpc_http, _}), do: 502
   defp status_for(:bad_email), do: 400
-  defp status_for(:txid_required), do: 400
   defp status_for(:email_required), do: 400
   defp status_for(_), do: 400
 
-  defp error_text(:txid_used), do: "txid already used"
   defp error_text(:unknown_payment), do: "unknown payment"
-  defp error_text(:tx_not_found), do: "solana transaction not found"
-  defp error_text(:amount_too_low), do: "USDC amount too low"
   defp error_text(:tx_failed), do: "solana transaction failed"
-  defp error_text(:bad_txid), do: "txid looks invalid"
+  defp error_text(:pay_master_key_missing), do: "payment master key is not configured"
+  defp error_text(:bad_pay_master_key), do: "payment master key is invalid"
+  defp error_text(:treasury_token_account_missing), do: "treasury USDC token account is missing"
+  defp error_text(:sweep_confirmation_timeout), do: "solana sweep was not confirmed in time"
   defp error_text(:bad_email), do: "email looks invalid"
-  defp error_text(:txid_required), do: "txid required"
   defp error_text(:email_required), do: "email required"
   defp error_text(other), do: "payment error: #{inspect(other)}"
 
@@ -164,29 +152,14 @@ defmodule WhoWasThereWeb.SiteController do
 
   defp plaintext(%{error: error}), do: "error: #{error}\n"
 
-  defp plaintext(%{wallet: _} = p) do
-    """
-    whowasthere pay
-
-    wallet   #{p.wallet}
-    mint     #{p.mint}
-    amount   #{p.amount_usdc} USDC / year
-    network  #{p.network}
-    cap      #{p.month_cap} pageviews / month (+#{p.month_cap} per extra #{p.amount_usdc} USDC)
-    trial    #{p.trial_days} days free
-
-    new      curl -s '#{p.new}'
-    renew    curl -s '#{p.renew}'
-    notify   curl -s '#{p.notify}'
-    """
-  end
-
   defp plaintext(%{site: _} = p) do
     """
     whowasthere
 
     site     #{p.site}
     pay      #{p.pay}   (#{p.plan}, until #{p.expires})
+    pay URL  #{p.pay_url}   ← secret; keep it with the dashboard URL
+    deposit  #{p.deposit}   (USDC on Solana)
     email    #{p.email || "-"}
     dash     #{p.dash}
     snippet  #{p.snippet}
@@ -200,7 +173,7 @@ defmodule WhoWasThereWeb.SiteController do
     whowasthere
 
     pay      #{pay}
-    #{if Map.has_key?(p, :plan), do: "plan     #{p.plan}\n", else: ""}#{if Map.has_key?(p, :expires), do: "expires  #{p.expires}\n", else: ""}email    #{p.email || "-"}
+    #{if Map.has_key?(p, :deposit), do: "send     #{p.amount_usdc} USDC to #{p.deposit}\n", else: ""}#{if Map.has_key?(p, :plan), do: "plan     #{p.plan}\n", else: ""}#{if Map.has_key?(p, :expires), do: "expires  #{p.expires}\n", else: ""}email    #{Map.get(p, :email) || "-"}
     """
   end
 

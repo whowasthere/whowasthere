@@ -195,8 +195,7 @@ defmodule WhoWasThereWeb.DashLive do
             </div>
           </div>
           <p :if={@billing.expired?} class="mt-3 text-xs text-error/80">
-            Hits are dropped. Pay {Billing.price_usdc()} USDC on Solana, then
-            <code class="font-mono">curl /renew?from={@billing.id}&to=TXID</code>
+            Hits are dropped. Send {Billing.price_usdc()} USDC to the address in your saved payment URL, then open that URL to settle it.
           </p>
         </section>
 
