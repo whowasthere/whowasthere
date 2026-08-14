@@ -7,13 +7,26 @@ defmodule WhoWasThere.Billing.SolanaTest do
   setup do
     previous_settle = Application.get_env(:whowasthere, :solana_profile_settle)
     previous_rpc = Application.get_env(:whowasthere, :solana_rpc_request)
+    previous_master_key = Application.get_env(:whowasthere, :pay_master_key)
 
     on_exit(fn ->
       Application.put_env(:whowasthere, :solana_profile_settle, previous_settle)
       Application.put_env(:whowasthere, :solana_rpc_request, previous_rpc)
+      Application.put_env(:whowasthere, :pay_master_key, previous_master_key)
     end)
 
     :ok
+  end
+
+  test "base58 normalization preserves derived deposit addresses" do
+    seed = :crypto.strong_rand_bytes(32)
+    cap = "p_sameprivatecapability"
+
+    Application.put_env(:whowasthere, :pay_master_key, Base.encode64(seed))
+    assert {:ok, address_before} = Solana.deposit_address(cap)
+
+    Application.put_env(:whowasthere, :pay_master_key, Base58.encode(seed))
+    assert {:ok, ^address_before} = Solana.deposit_address(cap)
   end
 
   test "finds the derived owner's ATA and signs a sweep transaction" do

@@ -103,18 +103,31 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
+            export IMAGE_TAG="sha-$(echo "${{ github.sha }}" | cut -c1-7)"
+            docker compose pull
             echo "Ensuring PAY_MASTER_KEY"
             if grep -Eq '^PAY_MASTER_KEY=.+$' .env; then
-              echo "PAY_MASTER_KEY is already configured"
+              pay_master_key="$(sed -n 's/^PAY_MASTER_KEY=//p' .env | tail -n 1)"
+              normalized_pay_master_key="$(docker compose run --rm --no-deps -T \
+                -e PHX_SERVER=false \
+                -e PAY_MASTER_KEY="$pay_master_key" \
+                app bin/whowasthere eval 'key = System.fetch_env!("PAY_MASTER_KEY"); seed = case Base.decode64(key) do {:ok, value} when byte_size(value) == 32 -> value; _ -> {:ok, value} = WhoWasThere.Base58.decode(key); value end; true = byte_size(seed) == 32; IO.write(WhoWasThere.Base58.encode(seed))')"
+              if [ "$pay_master_key" != "$normalized_pay_master_key" ]; then
+                sed "s|^PAY_MASTER_KEY=.*$|PAY_MASTER_KEY=$normalized_pay_master_key|" .env > .env.next
+                mv .env.next .env
+                echo "PAY_MASTER_KEY normalized to base58"
+              else
+                echo "PAY_MASTER_KEY is already configured as base58"
+              fi
             else
-              pay_master_key="$(openssl rand -base64 32 | tr -d '\n')"
+              pay_master_key="$(docker compose run --rm --no-deps -T \
+                -e PHX_SERVER=false \
+                app bin/whowasthere eval 'IO.write(WhoWasThere.Base58.encode(:crypto.strong_rand_bytes(32)))')"
               printf '\nPAY_MASTER_KEY=%s\n' "$pay_master_key" >> .env
-              chmod 600 .env
-              echo "PAY_MASTER_KEY generated on the server"
+              echo "PAY_MASTER_KEY generated on the server as base58"
             fi
-            export IMAGE_TAG="sha-$(echo "${{ github.sha }}" | cut -c1-7)"
+            chmod 600 .env
             echo "Deploying $IMAGE_TAG"
             echo "$IMAGE_TAG" > .image_tag
-            docker compose pull
             IMAGE_TAG="$IMAGE_TAG" docker compose up -d --remove-orphans
             docker image prune -f

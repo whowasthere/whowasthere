@@ -284,7 +284,7 @@ Running `grant` again extends an active `comp` profile from its current expiry. 
 | `PHX_HOST` | public hostname |
 | `PORT` | listen port, default `4000` |
 | `POOL_SIZE` | SQLite pool, default `5` |
-| `PAY_MASTER_KEY` | required; base64 or base58 encoded 32-byte Ed25519 seed for stable payment-profile addresses |
+| `PAY_MASTER_KEY` | required; base58-encoded 32-byte Ed25519 seed for stable payment-profile addresses |
 | `PAY_WALLET` | required for paid profiles; treasury owner whose existing USDC token account receives sweeps |
 | `SOLANA_RPC` | used for paid profiles; optional RPC URL (default public mainnet) |
 | `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
@@ -293,7 +293,7 @@ Running `grant` again extends an active `comp` profile from its current expiry. 
 docker build -t whowasthere .
 docker run --rm -p 4000:4000 \
   -e SECRET_KEY_BASE=$(mix phx.gen.secret) \
-  -e PAY_MASTER_KEY=BASE64_32_BYTE_SEED \
+  -e PAY_MASTER_KEY=BASE58_32_BYTE_SEED \
   -e PHX_HOST=localhost \
   -v wwt-data:/data \
   whowasthere
@@ -301,7 +301,7 @@ docker run --rm -p 4000:4000 \
 
 Or use the included `compose.yml`. Behind TLS, send `X-Forwarded-Proto`. `/health` is excluded from the HTTPS redirect. Releases run migrations on boot.
 
-Generate `PAY_MASTER_KEY` once (`openssl rand -base64 32`), back it up, and keep a small SOL balance on its public address for sweep fees. `PAY_WALLET` can remain a separate treasury whose private key is kept offline. To print the fee-payer address from a configured release:
+Generate `PAY_MASTER_KEY` once as a base58-encoded 32-byte seed, back it up, and keep a small SOL balance on its public address for sweep fees. The production deploy workflow generates it in the correct format when it is absent. `PAY_WALLET` can remain a separate treasury whose private key is kept offline. To print the fee-payer address from a configured release:
 
 ```bash
 bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.Solana.master_address())'
