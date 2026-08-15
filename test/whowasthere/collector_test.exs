@@ -1,7 +1,7 @@
 defmodule WhoWasThere.CollectorTest do
   use WhoWasThere.DataCase
 
-  alias WhoWasThere.{Analytics, Collector}
+  alias WhoWasThere.{Analytics, Collector, Store}
 
   @ua "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0 Safari/537.36"
 
@@ -146,6 +146,53 @@ defmodule WhoWasThere.CollectorTest do
     assert Enum.any?(report.dims["medium"], &(&1.key == "social" and &1.pageviews == 2))
     assert Enum.any?(report.dims["campaign"], &(&1.key == "launch" and &1.pageviews == 2))
     refute Enum.any?(report.dims["src"], &(&1.key == "direct"))
+  end
+
+  test "does not create bounces from custom events without a pageview" do
+    {:ok, _} = Collector.create_site("bounceevents1", "example.com")
+    t = System.system_time(:millisecond)
+
+    ingest(%{site_id: "bounceevents1", name: "c", event: "first", at: t})
+    ingest(%{site_id: "bounceevents1", name: "c", event: "second", at: t + 31 * 60 * 1000})
+    ingest(%{site_id: "bounceevents1", path: "/", at: t + 62 * 60 * 1000})
+
+    Collector.ping()
+    report = Analytics.report("bounceevents1", :today)
+
+    assert report.sessions == 1
+    assert report.bounces == 0
+    assert report.bounce_rate == 0.0
+  end
+
+  test "closes open sessions in the day where they were counted" do
+    {:ok, _} = Collector.create_site("bouncemidnight1", "example.com")
+    yesterday = Date.add(Date.utc_today(), -1)
+    now = System.system_time(:millisecond)
+    snap = %{Collector.empty_snap() | sessions: 1}
+
+    :ets.insert(:wwt_day, {{"bouncemidnight1", yesterday}, snap})
+
+    :ets.insert(
+      :wwt_sess,
+      {{"bouncemidnight1", 1},
+       %{
+         start: now - 1_000,
+         last: now,
+         hits: 1,
+         path: "/",
+         chain: [{:page, "/"}]
+       }}
+    )
+
+    :sys.replace_state(Collector, &%{&1 | day: yesterday})
+    Collector.flush()
+
+    totals = Store.range_totals("bouncemidnight1", yesterday, yesterday)
+    report = Analytics.report("bouncemidnight1", :today)
+
+    assert totals.sessions == 1
+    assert totals.bounces == 1
+    assert report.bounces == 0
   end
 
   defp ingest(over) do

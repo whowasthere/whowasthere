@@ -469,36 +469,24 @@ defmodule WhoWasThere.Collector do
   defp open_session(snap, key, now, event) do
     name = event[:name] || "v"
     path = event[:path] || "/"
-    pageview? = name == "v"
-    click? = name == "k"
 
-    {chain, snap} =
-      cond do
-        pageview? ->
-          snap =
-            snap
-            |> Map.update!(:sessions, &(&1 + 1))
-            |> Map.update!(:dims, &bump(&1, "entry", path))
+    if name == "v" do
+      snap =
+        snap
+        |> Map.update!(:sessions, &(&1 + 1))
+        |> Map.update!(:dims, &bump(&1, "entry", path))
 
-          push_chain(snap, [], {:page, path})
+      {chain, snap} = push_chain(snap, [], {:page, path})
 
-        click? ->
-          snap = Map.update!(snap, :sessions, &(&1 + 1))
-          push_chain(snap, [], {:click, event[:event] || "click"})
+      :ets.insert(
+        :wwt_sess,
+        {key, sess_fields(%{start: now}, now, 1, path, chain, event)}
+      )
 
-        true ->
-          {[], snap}
-      end
-
-    stored_path = if pageview?, do: path, else: nil
-    hits = if pageview?, do: 1, else: 0
-
-    :ets.insert(
-      :wwt_sess,
-      {key, sess_fields(%{start: now}, now, hits, stored_path, chain, event)}
-    )
-
-    snap
+      snap
+    else
+      snap
+    end
   end
 
   defp push_chain(snap, chain, step) do
@@ -527,7 +515,7 @@ defmodule WhoWasThere.Collector do
   end
 
   defp close_session(snap, start, last, hits, path, chain) do
-    bounces = if hits <= 1, do: snap.bounces + 1, else: snap.bounces
+    bounces = if hits == 1, do: snap.bounces + 1, else: snap.bounces
     snap = %{snap | bounces: bounces, duration_ms: snap.duration_ms + max(last - start, 0)}
 
     exit_path =
@@ -788,6 +776,7 @@ defmodule WhoWasThere.Collector do
     today = Date.utc_today()
 
     if Date.compare(today, day) == :gt do
+      close_open_sessions(day)
       persist_dirty(day)
       drop_days_before(today)
 
@@ -795,6 +784,31 @@ defmodule WhoWasThere.Collector do
     else
       state
     end
+  end
+
+  defp close_open_sessions(day) do
+    :ets.foldl(
+      fn {{id, _vis} = key, sess}, :ok ->
+        snap = get_snap(id, day)
+
+        snap =
+          close_session(
+            snap,
+            sess.start,
+            sess.last,
+            sess.hits,
+            Map.get(sess, :path),
+            Map.get(sess, :chain) || []
+          )
+
+        put_snap(id, day, snap)
+        :ets.insert(:wwt_dirty, {id, day})
+        :ets.delete(:wwt_sess, key)
+        :ok
+      end,
+      :ok,
+      :wwt_sess
+    )
   end
 
   defp drop_days_before(today) do
