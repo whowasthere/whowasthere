@@ -45,21 +45,17 @@ defmodule WhoWasThereWeb.Layouts do
           </span>
         </a>
 
-        <nav class="flex flex-wrap items-center justify-end gap-2">
-          <a href={~p"/#start"} class="chip">start</a>
-          <a href={~p"/#readme"} class="chip">docs</a>
-          <a href={~p"/#self-host"} class="chip">self-host</a>
-          <a href={~p"/#pricing"} class="chip">pricing</a>
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a href={~p"/#readme"} class="site-nav-link">docs</a>
+          <a href={~p"/#pricing"} class="site-nav-link">pricing</a>
+          <a href={~p"/#self-host"} class="site-nav-link">self-host</a>
           <a
             href="https://github.com/whowasthere/whowasthere"
-            class="chip"
+            class="site-nav-link"
             target="_blank"
             rel="noopener noreferrer"
           >
             github
-          </a>
-          <a href={~p"/new"} class="chip">
-            <span class="text-primary">$</span> curl /new
           </a>
         </nav>
       </div>

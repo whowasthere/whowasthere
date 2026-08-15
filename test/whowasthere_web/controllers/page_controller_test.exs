@@ -50,24 +50,27 @@ defmodule WhoWasThereWeb.PageControllerTest do
 
     hosted =
       document
-      |> LazyHTML.query("#start .home-hero-hosted")
+      |> LazyHTML.query("#start .start-hosted")
       |> LazyHTML.text()
       |> String.replace(~r/\s+/, " ")
 
-    assert LazyHTML.query(document, ".home-hero-title") |> LazyHTML.text() =~
-             "Understand your website"
+    nav = LazyHTML.query(document, ".site-nav")
 
-    assert LazyHTML.query(document, ".home-hero .eyebrow") |> LazyHTML.text() =~ "web analytics"
-    assert lead =~ "Who Was There shows traffic"
-    assert lead =~ "private dashboard"
-    assert lead =~ "raw visits"
-    assert lead =~ "useful aggregates"
+    assert LazyHTML.query(document, ".start-title") |> LazyHTML.text() =~ "Website analytics"
+    assert lead =~ "Who Was There gives you a private dashboard"
+    assert lead =~ "traffic, pages, referrers, devices, and journeys"
+    assert lead =~ "no cookies"
+    assert lead =~ "no raw visit logs"
     assert hosted =~ "Hosted here: 7 days free"
     assert hosted =~ "$30 USDC / year"
     assert hosted =~ "Self-host for full control"
-    assert LazyHTML.query(document, "#setup") |> Enum.count() == 1
     assert LazyHTML.query(document, "#start-event") |> Enum.empty?()
     assert LazyHTML.query(document, "#start-pixel") |> Enum.empty?()
+    assert LazyHTML.query(document, "#start-curl") |> Enum.empty?()
+    assert LazyHTML.query(nav, ".site-nav-link") |> Enum.count() == 4
+    assert LazyHTML.query(nav, ".chip") |> Enum.empty?()
+    refute LazyHTML.text(nav) =~ "start"
+    refute LazyHTML.text(nav) =~ "curl /new"
     assert html =~ "This instance uses:"
     assert html =~ "One plan for every site in a payment profile"
     assert html =~ "500,000 pageviews / month"
