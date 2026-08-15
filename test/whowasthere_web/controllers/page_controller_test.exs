@@ -40,10 +40,20 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-pay-status")
     assert html =~ "Pay when you’re ready"
     assert html =~ "SITE_KEY"
-    assert html =~ "Privacy-first web analytics"
-    assert html =~ "no cookies or raw visit logs"
-    assert html =~ "use this instance’s origin"
-    assert html =~ "payment instructions"
+
+    lead =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#start .start-lead")
+      |> LazyHTML.text()
+      |> String.replace(~r/\s+/, " ")
+
+    assert lead =~ "privacy-first analytics service for websites"
+    assert lead =~ "dashboard with traffic"
+    assert lead =~ "no cookies"
+    assert lead =~ "no raw visit logs"
+    assert lead =~ "run against this hosted instance"
+    assert lead =~ "run your own instance"
     assert html =~ "This instance uses:"
     assert html =~ "One plan for every site in a payment profile"
     assert html =~ "500,000 pageviews / month"
