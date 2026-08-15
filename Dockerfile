@@ -14,7 +14,7 @@ RUN cd assets && npm ci --omit=dev
 RUN mix compile && mix assets.deploy && mix release
 
 FROM alpine:3.22
-RUN apk add --no-cache libstdc++ ncurses-libs openssl wget
+RUN apk add --no-cache liblksctp libstdc++ ncurses-libs openssl wget
 WORKDIR /app
 RUN adduser -D -u 1000 app && mkdir -p /data && chown app:app /data
 USER app
