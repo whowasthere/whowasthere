@@ -915,11 +915,7 @@ a.chip:hover {
   display: grid;
   grid-template-columns: 10.5rem minmax(0, 1fr);
   gap: 1.15rem;
-  margin-top: 1rem;
-  border: 1px solid color-mix(in oklab, var(--color-primary) 24%, var(--line));
-  border-radius: 0.85rem;
-  background: color-mix(in oklab, var(--color-primary) 5%, transparent);
-  padding: 1rem;
+  margin-top: 1.25rem;
 }
 
 .payment-card[hidden],
