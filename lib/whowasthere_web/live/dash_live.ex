@@ -136,7 +136,7 @@ defmodule WhoWasThereWeb.DashLive do
               <span class="eyebrow">{@report.live} live now</span>
             </div>
             <h1 class={[
-              "mt-3 truncate font-mono text-3xl font-medium tracking-tighter sm:text-4xl",
+              "mt-3 truncate text-3xl font-semibold tracking-tighter sm:text-4xl",
               is_nil(@host) && "text-base-content/45"
             ]}>
               {@host || "no host yet"}

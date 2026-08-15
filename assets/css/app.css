@@ -23,8 +23,8 @@
   on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
 @plugin "daisyui/packages/bundle/daisyui-theme" {
   name: "dark";
-  default: true;
-  prefersdark: true;
+  default: false;
+  prefersdark: false;
   color-scheme: "dark";
   --color-base-100: oklch(15.5% 0.014 258);
   --color-base-200: oklch(22% 0.016 258);
@@ -58,14 +58,14 @@
 
 @plugin "daisyui/packages/bundle/daisyui-theme" {
   name: "light";
-  default: false;
+  default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(99% 0.002 255);
-  --color-base-200: oklch(97% 0.003 255);
-  --color-base-300: oklch(91% 0.006 255);
-  --color-base-content: oklch(22% 0.012 255);
-  --color-primary: oklch(52% 0.15 240);
+  --color-base-100: oklch(98.5% 0.006 92);
+  --color-base-200: oklch(96.5% 0.008 92);
+  --color-base-300: oklch(90.5% 0.012 92);
+  --color-base-content: oklch(24% 0.018 255);
+  --color-primary: oklch(50% 0.16 245);
   --color-primary-content: oklch(99% 0.01 240);
   --color-secondary: oklch(45% 0.02 255);
   --color-secondary-content: oklch(98% 0.005 255);
@@ -107,11 +107,11 @@
  * ---------------------------------------------------------------- */
 
 :root {
-  --line: color-mix(in oklab, var(--color-base-content) 14%, transparent);
-  --line-soft: color-mix(in oklab, var(--color-base-content) 8%, transparent);
-  --ink-dim: color-mix(in oklab, var(--color-base-content) 62%, transparent);
-  --ink-faint: color-mix(in oklab, var(--color-base-content) 42%, transparent);
-  --sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  --line: color-mix(in oklab, var(--color-base-content) 13%, transparent);
+  --line-soft: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+  --ink-dim: color-mix(in oklab, var(--color-base-content) 68%, transparent);
+  --ink-faint: color-mix(in oklab, var(--color-base-content) 48%, transparent);
+  --sans: "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, monospace;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
@@ -125,13 +125,12 @@ html {
 body {
   min-height: 100dvh;
   font-family: var(--sans);
-  letter-spacing: -0.011em;
+  letter-spacing: -0.006em;
   color: var(--color-base-content);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* Ambient light + engineering grid, both fixed and non-interactive. */
 body::before {
   content: "";
   position: fixed;
@@ -139,30 +138,12 @@ body::before {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(
-      1100px 620px at 50% -280px,
-      color-mix(in oklab, var(--color-primary) 26%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      700px 480px at 96% 4%,
-      color-mix(in oklab, var(--color-accent) 12%, transparent),
-      transparent 68%
-    );
+    radial-gradient(900px 480px at 14% -180px, color-mix(in oklab, var(--color-primary) 9%, transparent), transparent 72%),
+    radial-gradient(700px 420px at 92% -120px, color-mix(in oklab, var(--color-accent) 6%, transparent), transparent 70%);
 }
 
 body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, var(--line-soft) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--line-soft) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black, transparent 75%);
+  display: none;
 }
 
 ::selection {
@@ -209,33 +190,18 @@ body::after {
   position: relative;
   border: 1px solid var(--line);
   border-radius: var(--radius-box);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--color-base-200) 96%, transparent),
-      color-mix(in oklab, var(--color-base-200) 74%, transparent)
-    );
-  box-shadow: 0 1px 0 0 color-mix(in oklab, black 22%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in oklab, white 90%, var(--color-base-200));
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--color-base-content) 7%, transparent),
+    0 10px 28px -24px color-mix(in oklab, var(--color-base-content) 28%, transparent);
   transition:
     border-color 0.25s var(--ease),
     transform 0.25s var(--ease),
     box-shadow 0.25s var(--ease);
 }
 
-/* Hairline highlight along the top edge — reads as machined metal. */
 .panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in oklab, var(--color-base-content) 22%, transparent),
-    transparent
-  );
+  display: none;
 }
 
 .panel-lift:hover {
@@ -250,11 +216,12 @@ body::after {
 }
 
 .eyebrow {
-  font-family: var(--mono);
-  font-size: 0.6875rem;
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 700;
   line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   color: var(--ink-faint);
 }
 
@@ -287,8 +254,9 @@ a.chip:hover {
 .site-nav-link {
   position: relative;
   padding: 0.3rem 0;
-  font-family: var(--mono);
-  font-size: 0.75rem;
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--ink-faint);
   text-decoration: none;
   transition: color 0.2s var(--ease);
@@ -322,8 +290,15 @@ a.chip:hover {
   }
 
   .site-nav-link {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
   }
+}
+
+.site-header {
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in oklab, var(--color-base-100) 92%, transparent);
+  box-shadow: 0 1px 12px color-mix(in oklab, var(--color-base-content) 5%, transparent);
+  backdrop-filter: blur(16px);
 }
 
 /* Live indicator */
@@ -365,7 +340,8 @@ a.chip:hover {
 .seg-btn {
   border-radius: 9999px;
   padding: 0.3125rem 0.75rem;
-  font-family: var(--mono);
+  font-family: var(--sans);
+  font-weight: 600;
   font-size: 0.75rem;
   line-height: 1.1;
   color: var(--ink-faint);
@@ -467,19 +443,12 @@ a.chip:hover {
 
 .display-title,
 .readme > h1 {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: clamp(2.25rem, 6vw, 3.25rem);
-  font-weight: 600;
-  line-height: 1.02;
-  letter-spacing: -0.045em;
-  background: linear-gradient(
-    170deg,
-    var(--color-base-content),
-    color-mix(in oklab, var(--color-primary) 62%, var(--color-base-content))
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-weight: 650;
+  line-height: 1.04;
+  letter-spacing: -0.052em;
+  color: var(--color-base-content);
 }
 
 /* The opening paragraph reads as a deck. */
@@ -558,7 +527,7 @@ a.chip:hover {
   margin: 1.25rem 0;
   border: 1px solid var(--line);
   border-radius: 0.75rem;
-  background: color-mix(in oklab, var(--color-base-100) 82%, black);
+  background: var(--color-base-200);
   padding: 1rem 1.1rem;
   font-size: 0.8125rem;
   line-height: 1.6;
@@ -619,7 +588,7 @@ a.chip:hover {
 }
 
 .readme th {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.6875rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -734,7 +703,7 @@ a.chip:hover {
 }
 
 .hads-unit-attribution {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -777,7 +746,7 @@ a.chip:hover {
   width: fit-content;
   margin-top: 0.35rem;
   border-bottom: 1px solid color-mix(in oklab, var(--color-primary) 35%, transparent);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.75rem;
   color: var(--color-primary);
   text-decoration: none;
@@ -869,7 +838,7 @@ a.chip:hover {
   margin: 0;
   border: 1px solid var(--line);
   border-radius: 0.65rem;
-  background: color-mix(in oklab, var(--color-base-100) 82%, black);
+  background: var(--color-base-200);
   padding: 0.85rem 3.4rem 0.85rem 0.95rem;
   font-family: var(--mono);
   font-size: 0.75rem;
@@ -892,8 +861,9 @@ a.chip:hover {
   border-radius: 0.5rem;
   background: color-mix(in oklab, var(--color-primary) 14%, transparent);
   padding: 0.5rem 0.9rem;
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.8125rem;
+  font-weight: 650;
   color: var(--color-primary);
   cursor: pointer;
   transition:

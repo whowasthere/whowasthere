@@ -33,14 +33,14 @@ defmodule WhoWasThereWeb.Layouts do
 
   def shell(assigns) do
     ~H"""
-    <header class="sticky top-0 z-40 border-b border-base-content/8 bg-base-100/70 backdrop-blur-xl">
+    <header class="site-header sticky top-0 z-40">
       <div class={[
         "mx-auto flex items-center justify-between gap-4 px-5 py-3.5 sm:px-8",
         if(@wide, do: "max-w-7xl", else: "max-w-3xl")
       ]}>
         <a href={~p"/"} class="group flex items-center gap-2.5">
           <.mark />
-          <span class="font-mono text-[13px] tracking-tight">
+          <span class="text-[14px] font-semibold tracking-tight">
             who<span class="text-primary">was</span>there
           </span>
         </a>
@@ -145,43 +145,6 @@ defmodule WhoWasThereWeb.Layouts do
         Attempting to reconnect
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
-    </div>
-    """
-  end
-
-  @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-
-  See <head> in root.html.heex which applies the theme before page load.
-  """
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 [[data-theme-source=system]_&]:!left-0 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
     </div>
     """
   end

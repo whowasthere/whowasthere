@@ -7,6 +7,9 @@ defmodule WhoWasThereWeb.PageControllerTest do
     host = "#{conn.scheme}://#{conn.host}"
 
     assert html =~ "whowasthere"
+    assert html =~ ~s(<html phx-r lang="en" data-theme="light">)
+    assert html =~ ~s(<meta name="theme-color" content="#f7f7f4">)
+    refute html =~ "prefers-color-scheme: dark"
 
     assert html =~
              ~s(<meta name="description" content="Website analytics with no cookies or raw visit logs — only useful aggregates.">)

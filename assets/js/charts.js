@@ -9,7 +9,7 @@ import { CanvasRenderer } from "echarts/renderers"
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
-const MONO = 'ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, monospace'
+const UI_FONT = '"Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif'
 
 const darkPalette = ["#7dd3f0", "#5eead4", "#93c5fd", "#fbbf24", "#34d399", "#c4b5fd", "#fb7185", "#94a3b8"]
 const lightPalette = ["#0284c7", "#0d9488", "#2563eb", "#d97706", "#059669", "#7c3aed", "#e11d48", "#475569"]
@@ -33,7 +33,7 @@ const tooltipBase = (t) => ({
   borderColor: t.tooltipBorder,
   borderWidth: 1,
   padding: [8, 12],
-  textStyle: { color: t.text, fontFamily: MONO, fontSize: 12 },
+  textStyle: { color: t.text, fontFamily: UI_FONT, fontSize: 12 },
   extraCssText: "backdrop-filter: blur(10px); box-shadow: 0 12px 40px rgba(0,0,0,.28);",
 })
 
@@ -62,7 +62,7 @@ const lineOption = (payload, t) => {
       icon: "roundRect",
       itemWidth: 10,
       itemHeight: 6,
-      textStyle: { color: t.muted, fontFamily: MONO, fontSize: 11 },
+      textStyle: { color: t.muted, fontFamily: UI_FONT, fontSize: 11 },
     },
     grid: { left: 6, right: 10, top: series.length > 1 ? 32 : 16, bottom: 4, containLabel: true },
     xAxis: {
@@ -71,13 +71,13 @@ const lineOption = (payload, t) => {
       boundaryGap: false,
       axisTick: { show: false },
       axisLine: { lineStyle: { color: t.grid } },
-      axisLabel: { color: t.muted, fontFamily: MONO, fontSize: 10, hideOverlap: true },
+      axisLabel: { color: t.muted, fontFamily: UI_FONT, fontSize: 10, hideOverlap: true },
     },
     yAxis: {
       type: "value",
       minInterval: 1,
       splitLine: { lineStyle: { color: t.grid, type: "dashed" } },
-      axisLabel: { color: t.muted, fontFamily: MONO, fontSize: 10 },
+      axisLabel: { color: t.muted, fontFamily: UI_FONT, fontSize: 10 },
     },
     series: series.map((s, i) => ({
       name: s.name,
@@ -120,7 +120,7 @@ const barOption = (payload, t) => {
       axisLine: { lineStyle: { color: t.grid } },
       axisLabel: {
         color: t.muted,
-        fontFamily: MONO,
+        fontFamily: UI_FONT,
         fontSize: 10,
         hideOverlap: true,
         rotate: items.some((i) => String(i.name).length > 8) ? 28 : 0,
@@ -130,7 +130,7 @@ const barOption = (payload, t) => {
       type: "value",
       minInterval: 1,
       splitLine: { lineStyle: { color: t.grid, type: "dashed" } },
-      axisLabel: { color: t.muted, fontFamily: MONO, fontSize: 10 },
+      axisLabel: { color: t.muted, fontFamily: UI_FONT, fontSize: 10 },
     },
     series: [
       {
@@ -162,7 +162,7 @@ const pieOption = (payload, t) => {
       type: "scroll",
       itemWidth: 8,
       itemHeight: 8,
-      textStyle: { color: t.muted, fontFamily: MONO, fontSize: 11 },
+      textStyle: { color: t.muted, fontFamily: UI_FONT, fontSize: 11 },
     },
     series: [
       {
@@ -179,7 +179,7 @@ const pieOption = (payload, t) => {
         label: { show: false },
         emphasis: {
           scaleSize: 7,
-          label: { show: true, color: t.text, fontFamily: MONO, fontSize: 12, fontWeight: 500 },
+          label: { show: true, color: t.text, fontFamily: UI_FONT, fontSize: 12, fontWeight: 500 },
         },
         data: empty ? [] : items,
       },
