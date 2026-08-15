@@ -24,6 +24,9 @@ defmodule WhoWasThere.Mailer do
       :resend ->
         resend(to, subject, body)
 
+      :postal ->
+        postal(to, subject, body)
+
       fun when is_function(fun, 3) ->
         fun.(to, subject, body)
     end
@@ -52,6 +55,49 @@ defmodule WhoWasThere.Mailer do
           Logger.warning("resend failed: #{inspect(other)}")
           :ok
       end
+    end
+  end
+
+  defp postal(to, subject, body) do
+    url = Application.get_env(:whowasthere, :postal_url)
+    key = Application.get_env(:whowasthere, :postal_api_key)
+
+    from =
+      Application.get_env(:whowasthere, :mail_from, "Who Was There <noreply@whowasthere.dev>")
+      |> from_address()
+
+    if url in [nil, ""] or key in [nil, ""] do
+      Logger.warning("Postal configuration missing; mail not sent")
+      :ok
+    else
+      payload = %{from: from, to: [to], subject: subject, plain_body: body}
+
+      options = [
+        json: payload,
+        headers: [{"x-server-api-key", key}]
+      ]
+
+      result =
+        case Application.get_env(:whowasthere, :postal_request) do
+          fun when is_function(fun, 2) -> fun.(url <> "/api/v1/send/message", options)
+          _ -> Req.post(url <> "/api/v1/send/message", options)
+        end
+
+      case result do
+        {:ok, %{status: status, body: %{"status" => "success"}}} when status in 200..299 ->
+          :ok
+
+        other ->
+          Logger.warning("postal failed: #{inspect(other)}")
+          :ok
+      end
+    end
+  end
+
+  defp from_address(from) do
+    case Regex.run(~r/<([^<>]+)>\s*$/, from) do
+      [_, address] -> String.trim(address)
+      _ -> String.trim(from)
     end
   end
 end

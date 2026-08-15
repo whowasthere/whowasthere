@@ -79,8 +79,24 @@ if config_env() == :prod do
     config :whowasthere, solana_rpc: rpc
   end
 
-  if System.get_env("RESEND_API_KEY") do
-    config :whowasthere, mailer: :resend
+  postal_url = System.get_env("POSTAL_URL")
+  postal_api_key = System.get_env("POSTAL_API_KEY")
+
+  cond do
+    postal_url not in [nil, ""] and postal_api_key not in [nil, ""] ->
+      config :whowasthere,
+        mailer: :postal,
+        postal_url: String.trim_trailing(postal_url, "/"),
+        postal_api_key: postal_api_key
+
+    postal_url not in [nil, ""] or postal_api_key not in [nil, ""] ->
+      raise "POSTAL_URL and POSTAL_API_KEY must be set together"
+
+    System.get_env("RESEND_API_KEY") not in [nil, ""] ->
+      config :whowasthere, mailer: :resend
+
+    true ->
+      :ok
   end
 
   if from = System.get_env("MAIL_FROM") do

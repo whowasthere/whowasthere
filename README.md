@@ -156,7 +156,7 @@ After the sweep is confirmed, one year is added to the current expiry. If the pl
 
 There is no background watcher and no transaction id to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` is what checks and settles the address.
 
-Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses Resend when `RESEND_API_KEY` is set.
+Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses your Postal server when `POSTAL_URL` and `POSTAL_API_KEY` are set, or Resend when `RESEND_API_KEY` is set. Postal takes precedence when both are configured.
 
 ## API
 
@@ -287,7 +287,10 @@ Running `grant` again extends an active `comp` profile from its current expiry. 
 | `PAY_MASTER_KEY` | required; base58-encoded 32-byte Ed25519 seed for stable payment-profile addresses |
 | `PAY_WALLET` | required for paid profiles; treasury owner whose existing USDC token account receives sweeps |
 | `SOLANA_RPC` | used for paid profiles; optional RPC URL (default public mainnet) |
-| `RESEND_API_KEY` | optional; enables expiry / quota emails via Resend |
+| `MAIL_FROM` | sender address; its domain must be authorized by the selected mail provider |
+| `POSTAL_URL` | optional; base URL of a Postal server, e.g. `https://postal.example.com` |
+| `POSTAL_API_KEY` | Postal server API credential; set together with `POSTAL_URL` |
+| `RESEND_API_KEY` | optional Resend fallback when Postal is not configured |
 
 ```bash
 docker build -t whowasthere .
@@ -300,6 +303,14 @@ docker run --rm -p 4000:4000 \
 ```
 
 Or use the included `compose.yml`. Behind TLS, send `X-Forwarded-Proto`. `/health` is excluded from the HTTPS redirect. Releases run migrations on boot.
+
+For Postal, create a server API credential in its web interface and configure:
+
+```bash
+MAIL_FROM='Who Was There <noreply@example.com>'
+POSTAL_URL='https://postal.example.com'
+POSTAL_API_KEY='...'
+```
 
 Generate `PAY_MASTER_KEY` once as a base58-encoded 32-byte seed, back it up, and keep a small SOL balance on its public address for sweep fees. The production deploy workflow generates it in the correct format when it is absent. `PAY_WALLET` can remain a separate treasury whose private key is kept offline. To print the fee-payer address from a configured release:
 
