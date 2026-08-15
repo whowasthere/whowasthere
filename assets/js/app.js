@@ -158,8 +158,6 @@ const solanaPayForAmount = (uri, amount) => {
 const showIssued = (data, checked = false) => {
   lastIssued = data
   fillCode("start-snippet", data.snippet)
-  fillCode("start-pixel", data.pixel)
-  fillCode("start-event", data.event)
   fillCode("start-dash", data.dash)
   fillCode("start-pay", data.pay_url)
   fillCode("start-deposit", data.deposit)

@@ -1,32 +1,76 @@
-<Layouts.shell flash={@flash}>
+<Layouts.shell flash={@flash} wide>
   <section
     id="start"
     class="start"
     data-new-url={~p"/new?format=json"}
   >
-    <p class="eyebrow">start</p>
-    <h1 class="display-title">Who Was There</h1>
-    <p class="start-lead">
-      Who Was There is a privacy-first analytics service for websites. Add one script to get a private
-      dashboard with traffic, pages, referrers, devices, journeys, and custom events. It uses no cookies and
-      keeps no raw visit logs — only useful aggregates. The setup and payment controls below run against this
-      hosted instance. Seven days free, then <a href="#pricing">$30 USDC / year</a>. To run your own instance,
-      see <a href="#self-host">self-host</a>.
-    </p>
+    <div class="home-hero">
+      <div class="home-hero-copy">
+        <p class="eyebrow">privacy-first web analytics</p>
+        <h1 class="home-hero-title">Understand your website. Keep visitors private.</h1>
+        <p class="start-lead">
+          Who Was There shows traffic, pages, referrers, devices, and journeys in a private dashboard.
+          Add one small script; raw visits are reduced to useful aggregates and discarded.
+        </p>
+        <div class="home-hero-actions">
+          <a href="#setup" class="hero-primary">
+            Set up a site <.icon name="hero-arrow-down" class="size-4" />
+          </a>
+          <a href="#readme" class="hero-secondary">Read the docs</a>
+        </div>
+        <p class="home-hero-hosted">
+          Hosted here: 7 days free, then <a href="#pricing">$30 USDC / year</a>.
+          <a href="#self-host">Self-host</a>
+          for full control.
+        </p>
+      </div>
+
+      <div class="hero-preview" role="img" aria-label="Example private analytics dashboard">
+        <div class="hero-preview-bar">
+          <span><i class="pulse"></i> private dashboard</span>
+          <span class="num">today</span>
+        </div>
+        <div class="hero-preview-metrics">
+          <div>
+            <span>pageviews</span>
+            <strong class="num">8,420</strong>
+          </div>
+          <div>
+            <span>visitors</span>
+            <strong class="num">5,103</strong>
+          </div>
+          <div>
+            <span>live</span>
+            <strong class="num hero-preview-live">12</strong>
+          </div>
+        </div>
+        <div class="hero-preview-chart" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="hero-preview-pages">
+          <p><span>/</span><strong class="num">3,842</strong></p>
+          <p><span>/pricing</span><strong class="num">1,906</strong></p>
+          <p><span>/docs</span><strong class="num">1,144</strong></p>
+        </div>
+        <p class="hero-preview-foot">aggregate counters · no raw visit log</p>
+      </div>
+    </div>
 
     <script src="https://api.hads.dev/v1/hads.js?site=site_F7v4CJh18Dm4XZnSG64BlX4haf2xAanw" async>
     </script>
+
+    <div id="setup" class="start-heading">
+      <p class="eyebrow">setup</p>
+      <h2>From zero to live dashboard in four steps</h2>
+    </div>
 
     <ol class="start-steps">
       <li class="panel start-step">
         <span class="start-n num">01</span>
         <div>
           <h2>Create a site</h2>
-          <p>
-            Same as <code>curl /new</code>. This response contains the only dashboard URL; it is
-            never added to the tracker snippet.
-          </p>
-          <.copy_block id="start-curl" code={"curl -s #{@base_url}/new"} />
+          <p>No account or form. Save the private links returned here.</p>
           <button type="button" id="start-create" class="start-go">Create a site</button>
           <p id="start-meta" class="start-meta" hidden>
             site <span data-site class="num"></span> · <span data-plan></span>
@@ -38,15 +82,10 @@
         <span class="start-n num">02</span>
         <div>
           <h2>Paste the tracker</h2>
-          <p>In <code>&lt;head&gt;</code> or before <code>&lt;/body&gt;</code>. No cookies.</p>
+          <p>Add this one script to your site. It sets no cookies.</p>
           <.copy_block
             id="start-snippet"
             code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
-          />
-          <p class="start-sub">No JavaScript? A pixel counts pageviews only.</p>
-          <.copy_block
-            id="start-pixel"
-            code={~s(<img src="#{@base_url}/w.js?s=SITE_KEY" alt="" width="1" height="1">)}
           />
         </div>
       </li>
@@ -55,7 +94,7 @@
         <span class="start-n num">03</span>
         <div>
           <h2>Keep the dashboard</h2>
-          <p>Private signed URL. Save it when the site is created.</p>
+          <p>Save this private URL. It is the only way back to your stats.</p>
           <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
           <a
             id="start-dash-open"
@@ -67,8 +106,6 @@
           >
             Open dashboard
           </a>
-          <p class="start-sub">Custom events, after the script:</p>
-          <.copy_block id="start-event" code="window.wwt('signup')" />
         </div>
       </li>
 
@@ -77,8 +114,8 @@
         <div>
           <h2>Pay when you’re ready</h2>
           <p>
-            Seven days are free. After that, send 30 USDC on Solana. The address stays with this
-            payment profile and is also used for every renewal.
+            Seven days are free. Then send 30 USDC on Solana for a year. The deposit address stays
+            the same for renewals.
           </p>
           <p id="start-payment-empty" class="payment-empty">
             Create a site first — its private payment profile will appear here.

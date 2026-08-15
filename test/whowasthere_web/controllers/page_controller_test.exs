@@ -25,7 +25,6 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="hads-create")
     assert html =~ ~s(data-hads-slot="create")
     assert html =~ "https://api.hads.dev/v1/hads.js?site=site_F7v4CJh18Dm4XZnSG64BlX4haf2xAanw"
-    assert html =~ ~s(id="start-curl")
     assert html =~ ~s(id="start-snippet")
     assert html =~ ~s(id="start-pay")
     assert html =~ ~s(id="start-deposit")
@@ -41,19 +40,34 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ "Pay when you’re ready"
     assert html =~ "SITE_KEY"
 
+    document = LazyHTML.from_fragment(html)
+
     lead =
-      html
-      |> LazyHTML.from_fragment()
+      document
       |> LazyHTML.query("#start .start-lead")
       |> LazyHTML.text()
       |> String.replace(~r/\s+/, " ")
 
-    assert lead =~ "privacy-first analytics service for websites"
-    assert lead =~ "dashboard with traffic"
-    assert lead =~ "no cookies"
-    assert lead =~ "no raw visit logs"
-    assert lead =~ "run against this hosted instance"
-    assert lead =~ "run your own instance"
+    hosted =
+      document
+      |> LazyHTML.query("#start .home-hero-hosted")
+      |> LazyHTML.text()
+      |> String.replace(~r/\s+/, " ")
+
+    assert LazyHTML.query(document, ".home-hero-title") |> LazyHTML.text() =~
+             "Understand your website"
+
+    assert LazyHTML.query(document, ".home-hero .eyebrow") |> LazyHTML.text() =~ "web analytics"
+    assert lead =~ "Who Was There shows traffic"
+    assert lead =~ "private dashboard"
+    assert lead =~ "raw visits"
+    assert lead =~ "useful aggregates"
+    assert hosted =~ "Hosted here: 7 days free"
+    assert hosted =~ "$30 USDC / year"
+    assert hosted =~ "Self-host for full control"
+    assert LazyHTML.query(document, "#setup") |> Enum.count() == 1
+    assert LazyHTML.query(document, "#start-event") |> Enum.empty?()
+    assert LazyHTML.query(document, "#start-pixel") |> Enum.empty?()
     assert html =~ "This instance uses:"
     assert html =~ "One plan for every site in a payment profile"
     assert html =~ "500,000 pageviews / month"
