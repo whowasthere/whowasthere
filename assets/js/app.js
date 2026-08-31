@@ -191,6 +191,8 @@ const showIssued = (data, checked = false) => {
     if (less) less.disabled = selectedAmount === PAYMENT_STEP_USDC
     if (network) network.textContent = `Solana · ${data.network || "mainnet-beta"}`
     if (qr && paymentUri) drawPaymentQr(qr, paymentUri)
+    const cardBtn = document.getElementById("start-pay-card")
+    if (cardBtn) cardBtn.hidden = !data.stripe
     paymentStatus(data, checked)
   }
 
@@ -254,6 +256,43 @@ const bootStart = () => {
   })
   document.getElementById("start-pay-more")?.addEventListener("click", () => {
     changePaymentAmount(PAYMENT_STEP_USDC)
+  })
+
+  const cardBtn = document.getElementById("start-pay-card")
+  cardBtn?.addEventListener("click", async () => {
+    if (!lastIssued?.pay || !root.dataset.checkoutUrl) return
+
+    cardBtn.disabled = true
+    cardBtn.textContent = "redirecting…"
+    const status = document.getElementById("start-pay-status")
+    const csrf = document.querySelector("meta[name='csrf-token']")?.content
+
+    try {
+      const body = new URLSearchParams({
+        pay: lastIssued.pay,
+        amount: String(selectedPaymentAmount(lastIssued))
+      })
+      const res = await fetch(root.dataset.checkoutUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...(csrf ? {"x-csrf-token": csrf} : {})
+        },
+        body
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "checkout failed")
+      if (!data.url) throw new Error("checkout url missing")
+      window.location.href = data.url
+    } catch (error) {
+      if (status) {
+        status.dataset.state = "error"
+        status.textContent = error.message || "Card checkout failed."
+      }
+      cardBtn.textContent = "Pay with card"
+      cardBtn.disabled = false
+    }
   })
 
   const checkBtn = document.getElementById("start-pay-check")

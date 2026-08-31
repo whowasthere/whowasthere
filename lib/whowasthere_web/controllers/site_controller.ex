@@ -45,6 +45,7 @@ defmodule WhoWasThereWeb.SiteController do
               mint: info.mint,
               network: info.network,
               solana_pay: solana_pay,
+              stripe: info.stripe,
               plan: bill.kind,
               expires: DateTime.to_iso8601(bill.expires_at),
               email: bill.email,
@@ -76,6 +77,7 @@ defmodule WhoWasThereWeb.SiteController do
           mint: info.mint,
           network: info.network,
           solana_pay: solana_pay_uri(profile.deposit_address, info),
+          stripe: info.stripe,
           month_cap: payment.month_cap,
           plan: payment.kind,
           expires: DateTime.to_iso8601(payment.expires_at),
@@ -91,6 +93,27 @@ defmodule WhoWasThereWeb.SiteController do
 
   def renew(conn, params) do
     pay(conn, params)
+  end
+
+  def checkout(conn, params) do
+    pay = params["pay"]
+    amount = parse_amount(params["amount"])
+    base = base_url(conn)
+
+    urls = %{
+      success_url: "#{base}/pay?pay=#{URI.encode_www_form(pay || "")}&checkout=1",
+      cancel_url: "#{base}/#start-pay-step"
+    }
+
+    case Billing.start_checkout(pay, amount, urls) do
+      {:ok, %{url: url}} ->
+        json(conn, %{url: url})
+
+      {:error, reason} ->
+        conn
+        |> put_status(status_for(reason))
+        |> json(%{error: error_text(reason)})
+    end
   end
 
   def notify(conn, params) do
@@ -123,8 +146,12 @@ defmodule WhoWasThereWeb.SiteController do
   defp status_for(:bad_pay_master_key), do: 503
   defp status_for(:treasury_token_account_missing), do: 503
   defp status_for(:sweep_confirmation_timeout), do: 504
+  defp status_for(:stripe_not_configured), do: 503
+  defp status_for(:bad_amount), do: 400
   defp status_for({:rpc, _}), do: 502
   defp status_for({:rpc_http, _}), do: 502
+  defp status_for({:stripe_http, _, _}), do: 502
+  defp status_for({:stripe, _}), do: 502
   defp status_for(:bad_email), do: 400
   defp status_for(:email_required), do: 400
   defp status_for(_), do: 400
@@ -135,9 +162,20 @@ defmodule WhoWasThereWeb.SiteController do
   defp error_text(:bad_pay_master_key), do: "payment master key is invalid"
   defp error_text(:treasury_token_account_missing), do: "treasury USDC token account is missing"
   defp error_text(:sweep_confirmation_timeout), do: "solana sweep was not confirmed in time"
+  defp error_text(:stripe_not_configured), do: "card payments are not configured"
+  defp error_text(:bad_amount), do: "amount must be a multiple of 30 USDC"
   defp error_text(:bad_email), do: "email looks invalid"
   defp error_text(:email_required), do: "email required"
   defp error_text(other), do: "payment error: #{inspect(other)}"
+
+  defp parse_amount(nil), do: Billing.price_usdc()
+
+  defp parse_amount(value) do
+    case Integer.parse(to_string(value)) do
+      {n, ""} -> n
+      _ -> Billing.price_usdc()
+    end
+  end
 
   defp respond(conn, params, payload) do
     if json?(conn, params) do

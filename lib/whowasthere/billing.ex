@@ -7,7 +7,9 @@ defmodule WhoWasThere.Billing do
   """
   alias WhoWasThere.{ID, Mailer, PaymentProfile, Repo}
   alias WhoWasThere.Billing.Solana
+  alias WhoWasThere.Billing.Stripe, as: StripePay
   alias WhoWasThere.Store.Payment
+  alias WhoWasThere.Store.StripeCheckout
 
   @table :wwt_pay
   @trial_days 7
@@ -51,7 +53,7 @@ defmodule WhoWasThere.Billing do
   def flush_dirty do
     ensure_table()
 
-    for {id, meta} <- :ets.tab2list(@table), meta[:dirty] do
+    for {id, meta} <- :ets.tab2list(@table), is_binary(id), is_map(meta), meta[:dirty] do
       case Repo.get(Payment, id) do
         nil ->
           :ok
@@ -82,7 +84,8 @@ defmodule WhoWasThere.Billing do
       month_cap: @month_cap,
       trial_days: @trial_days,
       paid_days: @paid_days,
-      network: Application.get_env(:whowasthere, :solana_network, "mainnet-beta")
+      network: Application.get_env(:whowasthere, :solana_network, "mainnet-beta"),
+      stripe: StripePay.configured?()
     }
   end
 
@@ -92,7 +95,12 @@ defmodule WhoWasThere.Billing do
   def status(nil), do: nil
 
   def status(%Payment{} = pay) do
-    meta = cached(pay.id) || cache_put(pay)
+    meta =
+      case cached(pay.id) || load_cache(pay.id) do
+        nil -> meta_from_pay(pay)
+        meta -> meta
+      end
+
     status_from_meta(meta)
   end
 
@@ -147,40 +155,37 @@ defmodule WhoWasThere.Billing do
     end
   end
 
-  def start_for_profile(nil, email), do: open_profile(email)
+  @doc """
+  Starts a profile for `/new`.
+
+  Without `pay` and without email, returns a lazy capability that is not written
+  to SQLite until first hit, `/pay`, `/notify`, or `/new?pay=`. An email forces
+  immediate persistence so reminders have a row to attach to.
+  """
+  def start_for_profile(nil, email) do
+    with {:ok, email} <- normalize_email(email) do
+      if email, do: open_profile(email), else: issue_lazy_profile()
+    end
+  end
 
   def start_for_profile(cap, email) do
-    with %{payment_id: payment_id} = profile <- PaymentProfile.get_by_cap(cap),
-         %Payment{} = pay <- get(payment_id),
+    with {:ok, pay, profile, _cap} <- ensure_profile(cap),
          {:ok, pay} <- settle_profile(profile, pay, cap),
          {:ok, email} <- normalize_email(email) do
       {:ok, maybe_set_email(pay, email), profile, nil}
-    else
-      nil -> {:error, :unknown_payment}
-      other -> other
     end
   end
 
   def payment_profile(cap) do
-    case PaymentProfile.get_by_cap(cap) do
-      %{payment_id: payment_id} = profile ->
-        case get(payment_id) do
-          %Payment{} = pay ->
-            with {:ok, pay} <- settle_profile(profile, pay, cap), do: {:ok, pay, profile}
-
-          nil ->
-            {:error, :unknown_payment}
-        end
-
-      nil ->
-        {:error, :unknown_payment}
+    with {:ok, pay, profile, _cap} <- ensure_profile(cap),
+         {:ok, pay} <- settle_profile(profile, pay, cap) do
+      {:ok, pay, profile}
     end
   end
 
   def set_profile_email(cap, email) do
-    case PaymentProfile.get_by_cap(cap) do
-      %{payment_id: payment_id} -> set_email(payment_id, email)
-      nil -> {:error, :unknown_payment}
+    with {:ok, pay, _profile, _cap} <- ensure_profile(cap) do
+      set_email(pay.id, email)
     end
   end
 
@@ -194,32 +199,232 @@ defmodule WhoWasThere.Billing do
     years = Keyword.get(opts, :years, 1)
     month_cap = Keyword.get(opts, :month_cap, @month_cap)
 
-    with true <- (is_integer(years) and years in 1..100) || {:error, :bad_grant_years},
-         true <-
-           (is_integer(month_cap) and month_cap > 0) || {:error, :bad_grant_month_cap},
-         %{payment_id: payment_id} <- PaymentProfile.get_by_cap(cap),
-         %Payment{} = pay <- get(payment_id) do
+    cond do
+      not (is_integer(years) and years in 1..100) ->
+        {:error, :bad_grant_years}
+
+      not (is_integer(month_cap) and month_cap > 0) ->
+        {:error, :bad_grant_month_cap}
+
+      true ->
+        case ensure_profile(cap) do
+          {:ok, pay, _profile, _cap} ->
+            now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+            base =
+              if pay.kind in ["paid", "comp"],
+                do: Enum.max([pay.expires_at, now], DateTime),
+                else: now
+
+            updated =
+              pay
+              |> Ecto.Changeset.change(%{
+                kind: "comp",
+                expires_at: DateTime.add(base, years * @paid_days * 86_400, :second),
+                month_cap: month_cap,
+                notices: drop_expiry_notices(pay.notices)
+              })
+              |> Repo.update!()
+
+            cache_put(updated)
+            {:ok, updated}
+
+          error ->
+            error
+        end
+    end
+  end
+
+  @doc """
+  Deletes unused trial rows that never received traffic or settlement.
+
+  Lazy `/new` calls never create rows; this cleans trials that were materialized
+  (email, `/pay`, or a hit) and then abandoned.
+  """
+  def prune_unused_trials(older_than_days \\ 14)
+      when is_integer(older_than_days) and older_than_days > 0 do
+    import Ecto.Query
+
+    cutoff =
+      DateTime.utc_now()
+      |> DateTime.add(-older_than_days * 86_400, :second)
+      |> DateTime.truncate(:second)
+
+    candidates =
+      Repo.all(
+        from p in Payment,
+          where: p.kind == "trial" and p.hits_month == 0 and p.created_at < ^cutoff,
+          select: p.id
+      )
+
+    deleted =
+      Enum.reduce(candidates, 0, fn id, count ->
+        site? =
+          Repo.exists?(
+            from s in WhoWasThere.Store.Site,
+              where: s.payment_id == ^id
+          )
+
+        profile = PaymentProfile.get_by_payment(id)
+
+        if site? or match?(%{settled_usdc: n} when n > 0, profile) do
+          count
+        else
+          case get(id) do
+            %Payment{} = pay ->
+              Repo.delete!(pay)
+              :ets.delete(@table, id)
+              count + 1
+
+            _ ->
+              count
+          end
+        end
+      end)
+
+    {:ok, deleted}
+  rescue
+    _ -> {:ok, 0}
+  end
+
+  defp issue_lazy_profile do
+    with {:ok, lazy} <- PaymentProfile.issue_lazy() do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      base =
-        if pay.kind in ["paid", "comp"], do: Enum.max([pay.expires_at, now], DateTime), else: now
+      pay = %Payment{
+        id: lazy.payment_id,
+        kind: "trial",
+        email: nil,
+        expires_at: DateTime.add(now, @trial_days * 86_400, :second),
+        month: month_key(now),
+        hits_month: 0,
+        month_cap: @month_cap,
+        notices: "",
+        created_at: now
+      }
 
-      updated =
-        pay
-        |> Ecto.Changeset.change(%{
-          kind: "comp",
-          expires_at: DateTime.add(base, years * @paid_days * 86_400, :second),
-          month_cap: month_cap,
-          notices: drop_expiry_notices(pay.notices)
-        })
-        |> Repo.update!()
+      profile = %WhoWasThere.Store.PaymentProfile{
+        id: "profile_lazy",
+        payment_id: lazy.payment_id,
+        deposit_address: lazy.deposit_address,
+        settled_usdc: 0,
+        created_at: now
+      }
 
-      cache_put(updated)
-      {:ok, updated}
+      {:ok, pay, profile, lazy.cap}
+    end
+  end
+
+  defp ensure_profile(cap) when is_binary(cap) do
+    case PaymentProfile.get_by_cap(cap) do
+      %{payment_id: payment_id} = profile ->
+        case get(payment_id) do
+          %Payment{} = pay -> {:ok, pay, profile, cap}
+          nil -> {:error, :unknown_payment}
+        end
+
+      nil ->
+        materialize_cap(cap)
+    end
+  end
+
+  defp ensure_profile(_), do: {:error, :unknown_payment}
+
+  defp materialize_cap(cap) do
+    with payment_id when is_binary(payment_id) <- PaymentProfile.payment_id_for_cap(cap) do
+      case materialize_pair(payment_id, cap) do
+        {:ok, pay, profile} -> {:ok, pay, profile, cap}
+        {:error, _} = error -> error
+      end
     else
-      nil -> {:error, :unknown_payment}
-      false -> {:error, :bad_grant_options}
-      other -> other
+      _ -> {:error, :unknown_payment}
+    end
+  end
+
+  defp materialize_payment_id(payment_id) when is_binary(payment_id) do
+    case PaymentProfile.cap_for_payment_id(payment_id) do
+      cap when is_binary(cap) ->
+        case materialize_pair(payment_id, cap) do
+          {:ok, pay, _profile} -> pay
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp materialize_pair(payment_id, cap) do
+    case PaymentProfile.get_by_cap(cap) do
+      %{payment_id: ^payment_id} = profile ->
+        case get(payment_id) do
+          %Payment{} = pay -> {:ok, pay, profile}
+          nil -> {:error, :unknown_payment}
+        end
+
+      %{payment_id: _} ->
+        {:error, :unknown_payment}
+
+      nil ->
+        case get(payment_id) do
+          %Payment{} = pay ->
+            case PaymentProfile.create(payment_id, cap) do
+              {:ok, profile, ^cap} -> {:ok, pay, profile}
+              {:error, _} = error -> error
+            end
+
+          nil ->
+            insert_lazy_pair(payment_id, cap)
+        end
+    end
+  rescue
+    e in [Ecto.ConstraintError] ->
+      # Concurrent first use — reload the winner.
+      case PaymentProfile.get_by_cap(cap) do
+        %{payment_id: ^payment_id} = profile ->
+          case get(payment_id) do
+            %Payment{} = pay -> {:ok, pay, profile}
+            nil -> reraise e, __STACKTRACE__
+          end
+
+        _ ->
+          reraise e, __STACKTRACE__
+      end
+  end
+
+  defp insert_lazy_pair(payment_id, cap) do
+    with {:ok, pay} <- open_trial_with_id(payment_id, nil) do
+      case PaymentProfile.create(payment_id, cap) do
+        {:ok, profile, ^cap} ->
+          {:ok, pay, profile}
+
+        {:error, _} = error ->
+          Repo.delete!(pay)
+          :ets.delete(@table, payment_id)
+          error
+      end
+    end
+  end
+
+  defp open_trial_with_id(payment_id, email) do
+    with {:ok, email} <- normalize_email(email) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      pay = %Payment{
+        id: payment_id,
+        kind: "trial",
+        email: email,
+        expires_at: DateTime.add(now, @trial_days * 86_400, :second),
+        month: month_key(now),
+        hits_month: 0,
+        month_cap: @month_cap,
+        notices: "",
+        created_at: now
+      }
+
+      inserted = Repo.insert!(pay)
+      cache_put(inserted)
+      {:ok, inserted}
     end
   end
 
@@ -272,6 +477,123 @@ defmodule WhoWasThere.Billing do
     end
   end
 
+  def materialize_payment(payment_id) when is_binary(payment_id) do
+    case get(payment_id) do
+      %Payment{} = pay ->
+        cache_put(pay)
+        {:ok, pay}
+
+      nil ->
+        case materialize_payment_id(payment_id) do
+          %Payment{} = pay ->
+            cache_put(pay)
+            {:ok, pay}
+
+          _ ->
+            {:error, :unknown_payment}
+        end
+    end
+  end
+
+  def materialize_payment(_), do: {:error, :unknown_payment}
+
+  @doc """
+  Starts a Stripe Checkout session for a private payment capability.
+
+  Amount must be a multiple of #{@price_usdc} USDC (billed as USD 1:1).
+  """
+  def start_checkout(cap, amount_usdc, urls) when is_binary(cap) and is_map(urls) do
+    with true <- StripePay.configured?() || {:error, :stripe_not_configured},
+         true <- valid_checkout_amount?(amount_usdc) || {:error, :bad_amount},
+         {:ok, pay, _profile, _cap} <- ensure_profile(cap),
+         {:ok, session} <-
+           StripePay.create_checkout_session(%{
+             payment_id: pay.id,
+             amount_usdc: amount_usdc,
+             success_url: urls.success_url,
+             cancel_url: urls.cancel_url
+           }) do
+      {:ok, session}
+    end
+  end
+
+  def complete_stripe_checkout(session) when is_map(session) do
+    session_id = session["id"]
+    payment_id = session["metadata"]["payment_id"] || session["client_reference_id"]
+    amount = parse_amount_usdc(session)
+
+    cond do
+      not is_binary(session_id) or session_id == "" ->
+        {:error, :bad_stripe_session}
+
+      not is_binary(payment_id) or payment_id == "" ->
+        {:error, :bad_stripe_session}
+
+      session["payment_status"] not in ["paid", "no_payment_required"] ->
+        :ok
+
+      true ->
+        apply_stripe_session(session_id, payment_id, amount)
+    end
+  end
+
+  def complete_stripe_checkout(_), do: {:error, :bad_stripe_session}
+
+  defp apply_stripe_session(session_id, payment_id, amount) do
+    import Ecto.Query
+
+    if Repo.exists?(from s in StripeCheckout, where: s.session_id == ^session_id) do
+      :ok
+    else
+      with true <- valid_checkout_amount?(amount) || {:error, :bad_amount},
+           %Payment{} = pay <- get(payment_id),
+           %{id: _} = profile <- PaymentProfile.get_by_payment(payment_id),
+           {:ok, _pay} <- apply_payment(profile, pay, amount) do
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        Repo.insert!(%StripeCheckout{
+          session_id: session_id,
+          payment_id: payment_id,
+          amount_usdc: amount,
+          created_at: now
+        })
+
+        :ok
+      else
+        nil -> {:error, :unknown_payment}
+        {:error, _} = error -> error
+      end
+    end
+  rescue
+    e in [Ecto.ConstraintError] ->
+      if String.contains?(to_string(e.constraint), "stripe"),
+        do: :ok,
+        else: reraise(e, __STACKTRACE__)
+  end
+
+  defp parse_amount_usdc(session) do
+    case session do
+      %{"metadata" => %{"amount_usdc" => value}} ->
+        case Integer.parse(to_string(value)) do
+          {n, ""} -> n
+          _ -> 0
+        end
+
+      %{"amount_total" => total} when is_integer(total) ->
+        div(total, 100)
+
+      _ ->
+        0
+    end
+  end
+
+  defp valid_checkout_amount?(amount)
+       when is_integer(amount) and amount >= @price_usdc and amount <= @price_usdc * 20 do
+    rem(amount, @price_usdc) == 0
+  end
+
+  defp valid_checkout_amount?(_), do: false
+
   def allow_pageview?(payment_id) when is_binary(payment_id) do
     case ensure_meta(current_id(payment_id) || payment_id) do
       nil -> false
@@ -312,16 +634,37 @@ defmodule WhoWasThere.Billing do
     ensure_table()
     now = DateTime.utc_now()
 
-    for {id, _} <- :ets.tab2list(@table) do
+    for {id, meta} <- :ets.tab2list(@table), is_binary(id), is_map(meta) do
       case ensure_meta(id) do
         nil -> :ok
         meta -> maybe_expiry_mail(meta, now)
       end
     end
 
+    maybe_prune_unused_trials(now)
     :ok
   rescue
     _ -> :ok
+  end
+
+  defp maybe_prune_unused_trials(now) do
+    case :ets.lookup(@table, :__prune_at__) do
+      [{:__prune_at__, at}] when is_struct(at, DateTime) ->
+        if DateTime.compare(now, at) == :gt do
+          prune_unused_trials()
+          schedule_prune(now)
+        end
+
+      _ ->
+        schedule_prune(now)
+    end
+  rescue
+    _ -> :ok
+  end
+
+  defp schedule_prune(now) do
+    ensure_table()
+    :ets.insert(@table, {:__prune_at__, DateTime.add(now, 3600, :second)})
   end
 
   defp status_from_meta(meta) do
@@ -365,13 +708,13 @@ defmodule WhoWasThere.Billing do
     ensure_table()
 
     case :ets.lookup(@table, id) do
-      [{^id, meta}] -> roll_month_meta(meta)
-      [] -> nil
+      [{^id, meta}] when is_map(meta) -> roll_month_meta(meta)
+      _ -> nil
     end
   end
 
-  defp cache_put(%Payment{} = pay) do
-    meta = %{
+  defp meta_from_pay(%Payment{} = pay) do
+    %{
       id: pay.id,
       kind: pay.kind,
       email: pay.email,
@@ -382,8 +725,10 @@ defmodule WhoWasThere.Billing do
       notices: pay.notices || "",
       dirty: false
     }
+  end
 
-    cache_put(meta)
+  defp cache_put(%Payment{} = pay) do
+    cache_put(meta_from_pay(pay))
   end
 
   defp cache_put(%{id: id} = meta) do
@@ -531,26 +876,7 @@ defmodule WhoWasThere.Billing do
   defp settle_profile(profile, pay, cap) do
     case Solana.settle_profile(cap, profile.deposit_address, @price_usdc) do
       {:ok, amount} when is_integer(amount) and amount >= @price_usdc ->
-        now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-        expiry =
-          if pay.kind in ["paid", "comp"],
-            do: Enum.max([pay.expires_at, now], DateTime),
-            else: now
-
-        updated =
-          pay
-          |> Ecto.Changeset.change(%{
-            kind: "paid",
-            expires_at: DateTime.add(expiry, @paid_days * 86_400, :second),
-            month_cap: cap_for_usdc(amount),
-            notices: drop_expiry_notices(pay.notices)
-          })
-          |> Repo.update!()
-
-        PaymentProfile.add_settled(profile, amount)
-        cache_put(updated)
-        {:ok, updated}
+        apply_payment(profile, pay, amount)
 
       {:ok, _amount} ->
         {:ok, pay}
@@ -558,6 +884,33 @@ defmodule WhoWasThere.Billing do
       {:error, _} = error ->
         error
     end
+  end
+
+  defp apply_payment(profile, pay, amount)
+       when is_integer(amount) and amount >= @price_usdc do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    # Reload settled_usdc in case a concurrent settle already credited.
+    profile = PaymentProfile.get_by_payment(pay.id) || profile
+    total_usdc = profile.settled_usdc + amount
+
+    expiry =
+      if pay.kind in ["paid", "comp"],
+        do: Enum.max([pay.expires_at, now], DateTime),
+        else: now
+
+    updated =
+      pay
+      |> Ecto.Changeset.change(%{
+        kind: "paid",
+        expires_at: DateTime.add(expiry, @paid_days * 86_400, :second),
+        month_cap: cap_for_usdc(total_usdc),
+        notices: drop_expiry_notices(pay.notices)
+      })
+      |> Repo.update!()
+
+    PaymentProfile.add_settled(profile, amount)
+    cache_put(updated)
+    {:ok, updated}
   end
 
   defp meta_cap(%{month_cap: cap}) when is_integer(cap) and cap > 0, do: cap

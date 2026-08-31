@@ -27,6 +27,34 @@ defmodule WhoWasThere.BillingTest do
     assert profile.deposit_address =~ ~r/^[1-9A-HJ-NP-Za-km-z]{32,44}$/
   end
 
+  test "lazy profiles stay out of sqlite until first use" do
+    assert {:ok, pay, profile, cap} = Billing.start_for_profile(nil, nil)
+    assert cap =~ "p_"
+    assert pay.id =~ "t_"
+    assert PaymentProfile.get_by_cap(cap) == nil
+    assert Billing.get(pay.id) == nil
+
+    assert {:ok, materialized, stored, nil} = Billing.start_for_profile(cap, nil)
+    assert materialized.id == pay.id
+    assert stored.deposit_address == profile.deposit_address
+    assert PaymentProfile.get_by_cap(cap).payment_id == pay.id
+  end
+
+  test "prune_unused_trials removes abandoned materialized trials" do
+    assert {:ok, _pay, _profile, cap} = Billing.start_for_profile(nil, nil)
+    assert {:ok, pay, _, nil} = Billing.start_for_profile(cap, nil)
+
+    past = DateTime.utc_now() |> DateTime.add(-30 * 86_400, :second) |> DateTime.truncate(:second)
+
+    pay
+    |> Ecto.Changeset.change(%{created_at: past})
+    |> WhoWasThere.Repo.update!()
+
+    assert {:ok, 1} = Billing.prune_unused_trials(14)
+    assert Billing.get(pay.id) == nil
+    assert PaymentProfile.get_by_cap(cap) == nil
+  end
+
   test "quota blocks pageviews after the monthly cap" do
     assert {:ok, pay} = Billing.open_trial(nil)
 
@@ -56,6 +84,28 @@ defmodule WhoWasThere.BillingTest do
       assert paid.month_cap == Billing.month_cap() * 3
       assert PaymentProfile.get_by_cap(cap).settled_usdc == 90
       assert settled_profile.payment_id == paid.id
+    after
+      Application.put_env(:whowasthere, :solana_profile_settle, previous)
+    end
+  end
+
+  test "a later top-up adds quota units instead of replacing the month cap" do
+    previous = Application.get_env(:whowasthere, :solana_profile_settle)
+    amounts = start_supervised!({Agent, fn -> [90, 30] end})
+
+    Application.put_env(:whowasthere, :solana_profile_settle, fn _, _, _ ->
+      {:ok, Agent.get_and_update(amounts, fn [next | rest] -> {next, rest} end)}
+    end)
+
+    try do
+      assert {:ok, _pay, _profile, cap} = Billing.open_profile("topup@b.co")
+      assert {:ok, first, _} = Billing.payment_profile(cap)
+      assert first.month_cap == Billing.month_cap() * 3
+
+      assert {:ok, topped, _} = Billing.payment_profile(cap)
+      assert topped.kind == "paid"
+      assert topped.month_cap == Billing.month_cap() * 4
+      assert PaymentProfile.get_by_cap(cap).settled_usdc == 120
     after
       Application.put_env(:whowasthere, :solana_profile_settle, previous)
     end

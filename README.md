@@ -49,7 +49,7 @@ curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 
 The public `id` is 8–32 characters (`a-z`, `0-9`, `_`, `-`). It appears in the snippet as the first part of `data-w`. If that id already has a visit, `/new?id=` returns 409.
 
-`/new` signs an ingest key (`id.nonce.payment.mac`) and a dashboard token with the server secret. Without `pay` it creates a private payment profile and opens a **7-day trial**. Save both secret URLs from the response; every call without `pay` creates another profile. Hits whose `data-w` is missing or forged are ignored.
+`/new` signs an ingest key (`id.nonce.payment.mac`) and a dashboard token with the server secret. Without `pay` it issues a private payment capability and a **7-day trial** clock that starts when the profile is first used (first hit, `/pay`, or `/notify`). The capability is not written to the database until then, so empty `/new` spam does not fill SQLite. Passing `email=` persists immediately so reminders have a row. Save both secret URLs from the response; every call without `pay` issues another capability. Hits whose `data-w` is missing or forged are ignored.
 
 `host` is optional. If you pass it, it is baked into the ingest key and other origins never count. If you omit it, the first real visit stores the hostname and later hits from other origins are ignored.
 
@@ -130,9 +130,13 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 ## Payment details
 
-**$30 USDC / year** on Solana. A payment profile covers unlimited sites and a shared **500 000 pageviews / month**. Send more before settlement and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until the profile is funded again.
+**$30 / year** — USDC on Solana, or card via Stripe when `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set (hosted service). A payment profile covers unlimited sites and a shared **500 000 pageviews / month**. Send more before settlement (or pay a larger card amount) and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until the profile is funded again.
 
-The first `/new` response contains a private `pay URL`, a permanent Solana deposit address derived from its `p_SECRET`, and a Solana Pay URI. The homepage turns that URI into a wallet button and QR code after it creates a site; its amount control moves in 30 USDC steps and rebuilds both. Send USDC to the address, then use **I’ve paid — check**, open the payment URL, or create another site with the same `pay` value. The instance checks the address on demand, sweeps its USDC into `PAY_WALLET`, and activates the profile. Blockchain transaction ids are never credentials.
+The first `/new` response contains a private `pay URL`, a permanent Solana deposit address derived from its `p_SECRET`, and a Solana Pay URI. The homepage turns that URI into a wallet button and QR code after it creates a site; its amount control moves in 30 USDC steps and rebuilds both. When Stripe is configured it also shows **Pay with card** for the same amount in USD.
+
+**Solana:** send USDC to the deposit address, then use **I’ve paid — check**, open the payment URL, or create another site with the same `pay` value. The instance sweeps confirmed USDC into `PAY_WALLET` and activates the profile. Blockchain transaction ids are never credentials.
+
+**Card:** `POST /pay/checkout` with `pay` and `amount` (CSRF required in the browser) creates a Stripe Checkout Session. Stripe webhooks (`POST /stripe/webhook`) activate the profile; the same session is credited only once.
 
 ```bash
 curl -s https://whowasthere.fyi/new
@@ -152,7 +156,7 @@ curl -s 'https://whowasthere.fyi/renew?pay=p_SECRET'
 curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
 ```
 
-After the sweep is confirmed, one year is added to the current expiry. If the plan has already expired, the new year starts when the payment is settled. Calling either endpoint again with an empty deposit address only returns the current status; it does not extend the plan twice. A larger deposit sets the shared monthly allowance for the renewed plan at 500,000 pageviews for every complete 30 USDC.
+After the sweep is confirmed, one year is added to the current expiry. If the plan has already expired, the new year starts when the payment is settled. Calling either endpoint again with an empty deposit address only returns the current status; it does not extend the plan twice. Each settled deposit adds quota: the shared monthly allowance is 500,000 pageviews for every complete 30 USDC ever settled on the profile (so a later 30 USDC top-up after 90 keeps 2,000,000, not 500,000).
 
 There is no background watcher and no transaction id to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` is what checks and settles the address.
 
@@ -164,7 +168,9 @@ Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=
 | --- | --- | --- |
 | `GET` | `/new` | create a site (7-day trial) |
 | `GET` | `/new?id=&host=&pay=&email=&format=json` | same, optionally using a private payment profile |
-| `GET` | `/pay?pay=p_SECRET` | settle deposits and show payment status |
+| `GET` | `/pay?pay=p_SECRET` | settle Solana deposits and show payment status |
+| `POST` | `/pay/checkout` | start Stripe Checkout (`pay`, `amount`; browser CSRF) |
+| `POST` | `/stripe/webhook` | Stripe webhooks (signature required) |
 | `GET` | `/renew?pay=p_SECRET` | alias for `/pay` |
 | `GET` | `/notify?pay=&email=` | set reminder email |
 | `GET` | `/w.js` | tracker |
@@ -285,8 +291,10 @@ Running `grant` again extends an active `comp` profile from its current expiry. 
 | `PORT` | listen port, default `4000` |
 | `POOL_SIZE` | SQLite pool, default `5` |
 | `PAY_MASTER_KEY` | required; base58-encoded 32-byte Ed25519 seed for stable payment-profile addresses |
-| `PAY_WALLET` | required for paid profiles; treasury owner whose existing USDC token account receives sweeps |
-| `SOLANA_RPC` | used for paid profiles; optional RPC URL (default public mainnet) |
+| `PAY_WALLET` | required for paid Solana profiles; treasury owner whose existing USDC token account receives sweeps |
+| `SOLANA_RPC` | used for paid Solana profiles; optional RPC URL (default public mainnet) |
+| `STRIPE_SECRET_KEY` | optional; enables card Checkout (`sk_…` or restricted key) |
+| `STRIPE_WEBHOOK_SECRET` | optional with Stripe; webhook signing secret (`whsec_…`) for `/stripe/webhook` |
 | `MAIL_FROM` | sender address; its domain must be authorized by the selected mail provider |
 | `POSTAL_URL` | optional; base URL of a Postal server, e.g. `https://postal.example.com` |
 | `POSTAL_API_KEY` | Postal server API credential; set together with `POSTAL_URL` |

@@ -23,6 +23,14 @@ end
 config :whowasthere, WhoWasThereWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+if stripe_key = System.get_env("STRIPE_SECRET_KEY") do
+  config :whowasthere, stripe_secret_key: stripe_key
+end
+
+if stripe_wh = System.get_env("STRIPE_WEBHOOK_SECRET") do
+  config :whowasthere, stripe_webhook_secret: stripe_wh
+end
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :whowasthere, WhoWasThereWeb.Endpoint,
@@ -77,6 +85,14 @@ if config_env() == :prod do
 
   if rpc = System.get_env("SOLANA_RPC") do
     config :whowasthere, solana_rpc: rpc
+  end
+
+  if stripe_key = System.get_env("STRIPE_SECRET_KEY") do
+    config :whowasthere, stripe_secret_key: stripe_key
+  end
+
+  if stripe_wh = System.get_env("STRIPE_WEBHOOK_SECRET") do
+    config :whowasthere, stripe_webhook_secret: stripe_wh
   end
 
   postal_url = System.get_env("POSTAL_URL")

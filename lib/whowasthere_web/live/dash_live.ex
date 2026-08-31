@@ -74,6 +74,7 @@ defmodule WhoWasThereWeb.DashLive do
       end
 
     payment_id = Billing.current_id(payment_id) || payment_id
+    _ = Billing.materialize_payment(payment_id)
     billing = Billing.status(payment_id)
 
     charts = %{

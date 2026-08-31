@@ -50,29 +50,6 @@ defmodule WhoWasThere.Store do
   def save_day(site_id, %Date{} = day, snap) do
     hll_bin = if day == Date.utc_today(), do: HLL.to_bin(snap.hll), else: nil
 
-    Repo.insert(
-      %WhoWasThere.Store.Day{
-        site_id: site_id,
-        day: day,
-        pageviews: snap.pageviews,
-        uniques: HLL.cardinality(snap.hll),
-        sessions: snap.sessions,
-        bounces: snap.bounces,
-        duration_ms: snap.duration_ms,
-        hll: hll_bin
-      },
-      on_conflict: {:replace_all_except, [:site_id, :day]},
-      conflict_target: [:site_id, :day]
-    )
-
-    Repo.delete_all(
-      from d in WhoWasThere.Store.Dim, where: d.site_id == ^site_id and d.day == ^day
-    )
-
-    Repo.delete_all(
-      from h in WhoWasThere.Store.Hour, where: h.site_id == ^site_id and h.day == ^day
-    )
-
     dim_rows =
       for {kind, map} <- snap.dims, {key, views} <- map do
         %{site_id: site_id, day: day, kind: kind, key: key, pageviews: views}
@@ -83,9 +60,40 @@ defmodule WhoWasThere.Store do
         %{site_id: site_id, day: day, hour: hour, pageviews: views}
       end
 
-    if dim_rows != [], do: Repo.insert_all(WhoWasThere.Store.Dim, dim_rows)
-    if hour_rows != [], do: Repo.insert_all(WhoWasThere.Store.Hour, hour_rows)
-    :ok
+    case Repo.transaction(fn ->
+           case Repo.insert(
+                  %WhoWasThere.Store.Day{
+                    site_id: site_id,
+                    day: day,
+                    pageviews: snap.pageviews,
+                    uniques: HLL.cardinality(snap.hll),
+                    sessions: snap.sessions,
+                    bounces: snap.bounces,
+                    duration_ms: snap.duration_ms,
+                    hll: hll_bin
+                  },
+                  on_conflict: {:replace_all_except, [:site_id, :day]},
+                  conflict_target: [:site_id, :day]
+                ) do
+             {:ok, _} -> :ok
+             {:error, reason} -> Repo.rollback(reason)
+           end
+
+           Repo.delete_all(
+             from d in WhoWasThere.Store.Dim, where: d.site_id == ^site_id and d.day == ^day
+           )
+
+           Repo.delete_all(
+             from h in WhoWasThere.Store.Hour, where: h.site_id == ^site_id and h.day == ^day
+           )
+
+           if dim_rows != [], do: Repo.insert_all(WhoWasThere.Store.Dim, dim_rows)
+           if hour_rows != [], do: Repo.insert_all(WhoWasThere.Store.Hour, hour_rows)
+           :ok
+         end) do
+      {:ok, :ok} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def load_today(%Date{} = today) do

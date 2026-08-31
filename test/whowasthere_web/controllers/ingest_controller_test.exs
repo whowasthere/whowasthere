@@ -12,6 +12,9 @@ defmodule WhoWasThereWeb.IngestControllerTest do
   end
 
   test "GET /new signs keys and does not write the database", %{conn: conn} do
+    payments_before = WhoWasThere.Repo.aggregate(WhoWasThere.Store.Payment, :count)
+    profiles_before = WhoWasThere.Repo.aggregate(WhoWasThere.Store.PaymentProfile, :count)
+
     conn = get(conn, ~p"/new?format=json")
     body = json_response(conn, 200)
     assert body["site"]
@@ -33,6 +36,29 @@ defmodule WhoWasThereWeb.IngestControllerTest do
     refute body["dash"] =~ "/#{body["site"]}"
     refute body["snippet"] =~ "/d/"
     assert Store.get_site(body["site"]) == nil
+    assert WhoWasThere.Repo.aggregate(WhoWasThere.Store.Payment, :count) == payments_before
+    assert WhoWasThere.Repo.aggregate(WhoWasThere.Store.PaymentProfile, :count) == profiles_before
+  end
+
+  test "GET /pay materializes a lazy payment profile", %{conn: conn} do
+    created = conn |> get(~p"/new?format=json") |> json_response(200)
+    assert WhoWasThere.PaymentProfile.get_by_cap(created["pay"]) == nil
+
+    paid = get(recycle(conn), "/pay?pay=#{created["pay"]}&format=json")
+    body = json_response(paid, 200)
+
+    assert body["plan"] == "trial"
+    assert body["deposit"] == created["deposit"]
+
+    assert WhoWasThere.PaymentProfile.get_by_cap(created["pay"]).deposit_address ==
+             created["deposit"]
+  end
+
+  test "a forged pay capability does not materialize", %{conn: conn} do
+    forged = "p_23456789abcdefghijkmnp"
+    conn = get(conn, "/pay?pay=#{forged}&format=json")
+    assert json_response(conn, 404)["error"] == "unknown payment"
+    assert WhoWasThere.PaymentProfile.get_by_cap(forged) == nil
   end
 
   test "payment profiles are private capabilities and txid is ignored", %{conn: conn} do

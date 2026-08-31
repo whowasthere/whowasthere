@@ -3,18 +3,18 @@
     id="start"
     class="start"
     data-new-url={~p"/new?format=json"}
+    data-checkout-url={~p"/pay/checkout"}
   >
     <div class="start-hero">
-      <p class="eyebrow">privacy-first web analytics</p>
-      <h1 class="display-title start-title">Website analytics without visitor profiles.</h1>
+      <h1 class="display-title start-title">Who Was There</h1>
       <p class="start-lead">
-        Who Was There gives you a private dashboard for traffic, pages, referrers, devices, and journeys.
-        Add one small script. It sets no cookies and stores no raw visit logs.
+        Website analytics without visitor profiles. One small script, a private dashboard,
+        daily aggregates only — no cookies, no raw hit log.
       </p>
       <p class="start-hosted">
-        Hosted here: 7 days free, then <a href="#pricing">$30 USDC / year</a>.
-        <a href="#self-host">Self-host</a>
-        for full control.
+        <a href="#pricing">$30 USDC / year</a>
+        after 7 days free. <a href="#self-host">Self-host</a>
+        if you want the keys.
       </p>
     </div>
 
@@ -26,7 +26,7 @@
         <span class="start-n num">01</span>
         <div>
           <h2>Create a site</h2>
-          <p>No account or form. Save the private links returned here.</p>
+          <p>No account. You get a tracker key and two secret links — save both.</p>
           <button type="button" id="start-create" class="start-go">Create a site</button>
           <p id="start-meta" class="start-meta" hidden>
             site <span data-site class="num"></span> · <span data-plan></span>
@@ -38,7 +38,7 @@
         <span class="start-n num">02</span>
         <div>
           <h2>Paste the tracker</h2>
-          <p>Add this one script to your site. It sets no cookies.</p>
+          <p>One tag in your pages. Same origin as this instance.</p>
           <.copy_block
             id="start-snippet"
             code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
@@ -50,7 +50,7 @@
         <span class="start-n num">03</span>
         <div>
           <h2>Keep the dashboard</h2>
-          <p>Save this private URL. It is the only way back to your stats.</p>
+          <p>Private URL. Not in the snippet — bookmark it.</p>
           <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
           <a
             id="start-dash-open"
@@ -70,11 +70,11 @@
         <div>
           <h2>Pay when you’re ready</h2>
           <p>
-            Seven days are free. After that, send 30 USDC on Solana. The address stays with this
-            payment profile and is also used for every renewal.
+            After the trial, send USDC on Solana to this profile’s deposit address.
+            Same address for renewals and top-ups.
           </p>
           <p id="start-payment-empty" class="payment-empty">
-            Create a site first — its private payment profile will appear here.
+            Create a site first — payment details appear here.
           </p>
           <div id="start-payment" class="payment-card" hidden>
             <div class="payment-qr-wrap">
@@ -89,7 +89,7 @@
               <p>Scan with a Solana Pay wallet</p>
             </div>
             <div class="payment-details">
-              <p class="start-sub payment-amount-label">Payment amount</p>
+              <p class="start-sub payment-amount-label">Amount</p>
               <div id="start-pay-amount-control" class="payment-amount-control">
                 <button
                   type="button"
@@ -111,10 +111,13 @@
                 </button>
               </div>
               <p id="start-pay-network" class="payment-network">Solana · mainnet-beta</p>
-              <p class="start-sub">Permanent deposit address</p>
+              <p class="start-sub">Deposit address</p>
               <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
               <div class="payment-actions">
                 <a id="start-wallet-open" class="start-open" href="#" hidden>Open wallet</a>
+                <button type="button" id="start-pay-card" class="start-go" hidden>
+                  Pay with card
+                </button>
                 <button type="button" id="start-pay-check" class="start-go">
                   I’ve paid — check
                 </button>
@@ -122,7 +125,7 @@
               <p id="start-pay-status" class="payment-status" aria-live="polite"></p>
             </div>
             <div class="payment-secret">
-              <p class="start-sub">Save this private payment URL with the dashboard</p>
+              <p class="start-sub">Private payment URL — keep with the dashboard</p>
               <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
               <a
                 id="start-pay-open"
@@ -167,35 +170,38 @@
         <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="text-sm text-base-content/55">
-              One plan for every site in a payment profile
+              One payment profile · unlimited sites
             </p>
             <p class="mt-2 text-4xl font-semibold tracking-tighter sm:text-5xl">
               30 <span class="text-xl text-primary sm:text-2xl">USDC / year</span>
             </p>
           </div>
           <p class="max-w-xs text-sm leading-relaxed text-base-content/55">
-            Seven days free. Payments run on Solana and settle only when you use your private payment URL.
+            Pay on Solana or by card (when enabled). Open your private pay URL to settle crypto;
+            card checkout activates the plan via Stripe.
+            Extra 30 USDC/USD adds another 500,000 pageviews / month.
           </p>
         </div>
       </div>
       <div class="grid divide-y divide-base-content/8 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <div class="px-6 py-5 sm:px-8">
-          <p class="eyebrow">sites</p>
-          <p class="mt-2 text-sm">Unlimited</p>
+          <p class="eyebrow">trial</p>
+          <p class="mt-2 text-sm">7 days</p>
         </div>
         <div class="px-6 py-5 sm:px-8">
           <p class="eyebrow">included</p>
           <p class="mt-2 text-sm">500,000 pageviews / month</p>
         </div>
         <div class="px-6 py-5 sm:px-8">
-          <p class="eyebrow">scale</p>
-          <p class="mt-2 text-sm">+500,000 for each extra 30 USDC</p>
+          <p class="eyebrow">top-up</p>
+          <p class="mt-2 text-sm">+500,000 per extra 30 USDC</p>
         </div>
       </div>
     </div>
   </section>
 
   <article id="readme" class="readme readme-follow">
+    <p class="eyebrow">docs</p>
     {raw(@readme)}
   </article>
 </Layouts.shell>

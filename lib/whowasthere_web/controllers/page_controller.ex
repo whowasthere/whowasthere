@@ -14,7 +14,11 @@ defmodule WhoWasThereWeb.PageController do
         url: base,
         image: "#{base}/images/icon-512.png"
       },
-      readme: WhoWasThere.Readme.html(base, omit_intro: true)
+      readme:
+        WhoWasThere.Readme.html(base,
+          omit_intro: true,
+          omit_sections: ["Create a site", "Add the tracker"]
+        )
     )
   end
 

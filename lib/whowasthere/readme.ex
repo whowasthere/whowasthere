@@ -13,6 +13,7 @@ defmodule WhoWasThere.Readme do
     hosted =
       hosted
       |> maybe_omit_intro(Keyword.get(opts, :omit_intro, false))
+      |> maybe_omit_sections(Keyword.get(opts, :omit_sections, []))
       |> rewrite_hosted(base)
       |> maybe_rewrite_home_context(Keyword.get(opts, :omit_intro, false))
 
@@ -35,6 +36,22 @@ defmodule WhoWasThere.Readme do
       [_, rest] -> "## " <> rest
       [whole] -> whole
     end
+  end
+
+  defp maybe_omit_sections(markdown, []), do: markdown
+
+  defp maybe_omit_sections(markdown, titles) when is_list(titles) do
+    drop = MapSet.new(titles)
+
+    markdown
+    |> String.split(~r/\n(?=## )/)
+    |> Enum.reject(fn chunk ->
+      case Regex.run(~r/^## ([^\n]+)/, chunk) do
+        [_, title] -> MapSet.member?(drop, String.trim(title))
+        _ -> false
+      end
+    end)
+    |> Enum.join("\n")
   end
 
   defp rewrite_hosted(markdown, base) do

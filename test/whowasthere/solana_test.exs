@@ -8,11 +8,18 @@ defmodule WhoWasThere.Billing.SolanaTest do
     previous_settle = Application.get_env(:whowasthere, :solana_profile_settle)
     previous_rpc = Application.get_env(:whowasthere, :solana_rpc_request)
     previous_master_key = Application.get_env(:whowasthere, :pay_master_key)
+    previous_attempts = Application.get_env(:whowasthere, :solana_confirm_attempts)
 
     on_exit(fn ->
       Application.put_env(:whowasthere, :solana_profile_settle, previous_settle)
       Application.put_env(:whowasthere, :solana_rpc_request, previous_rpc)
       Application.put_env(:whowasthere, :pay_master_key, previous_master_key)
+
+      if previous_attempts do
+        Application.put_env(:whowasthere, :solana_confirm_attempts, previous_attempts)
+      else
+        Application.delete_env(:whowasthere, :solana_confirm_attempts)
+      end
     end)
 
     :ok
@@ -98,6 +105,116 @@ defmodule WhoWasThere.Billing.SolanaTest do
     end)
 
     assert {:ok, 0} = Solana.settle_profile(cap, owner, 30)
+  end
+
+  test "credits the successful sweep when a later ATA sweep fails" do
+    cap = "p_456789abcdefghijkmnpqr"
+    {:ok, owner} = Solana.deposit_address(cap)
+    blockhash = Base58.encode(:binary.copy(<<7>>, 32))
+    source_ok = Base58.encode(:binary.copy(<<8>>, 32))
+    source_fail = Base58.encode(:binary.copy(<<10>>, 32))
+    destination = Base58.encode(:binary.copy(<<9>>, 32))
+    sends = start_supervised!({Agent, fn -> 0 end})
+
+    Application.delete_env(:whowasthere, :solana_profile_settle)
+
+    Application.put_env(:whowasthere, :solana_rpc_request, fn
+      "getTokenAccountsByOwner", [^owner, _, _] ->
+        {:ok,
+         %{
+           "value" => [
+             token_account(source_ok, 30_000_000),
+             token_account(source_fail, 30_000_000)
+           ]
+         }}
+
+      "getTokenAccountsByOwner", [_treasury, _, _] ->
+        {:ok, %{"value" => [token_account(destination, 0)]}}
+
+      "getLatestBlockhash", _ ->
+        {:ok, %{"value" => %{"blockhash" => blockhash}}}
+
+      "sendTransaction", _ ->
+        n = Agent.get_and_update(sends, &{&1 + 1, &1 + 1})
+
+        if n == 1 do
+          {:ok, "sweep-ok"}
+        else
+          {:error, {:rpc, "second sweep failed"}}
+        end
+
+      "getSignatureStatuses", [["sweep-ok"], _] ->
+        {:ok, %{"value" => [%{"err" => nil, "confirmationStatus" => "confirmed"}]}}
+    end)
+
+    assert {:ok, 30} = Solana.settle_profile(cap, owner, 30)
+    assert Agent.get(sends, & &1) == 2
+  end
+
+  test "treats a confirmation timeout as swept when the source ATA is empty" do
+    cap = "p_56789abcdefghijkmnpqrs"
+    {:ok, owner} = Solana.deposit_address(cap)
+    blockhash = Base58.encode(:binary.copy(<<7>>, 32))
+    source = Base58.encode(:binary.copy(<<8>>, 32))
+    destination = Base58.encode(:binary.copy(<<9>>, 32))
+
+    Application.delete_env(:whowasthere, :solana_profile_settle)
+    Application.put_env(:whowasthere, :solana_confirm_attempts, 1)
+
+    Application.put_env(:whowasthere, :solana_rpc_request, fn
+      "getTokenAccountsByOwner", [^owner, _, _] ->
+        {:ok, %{"value" => [token_account(source, 60_000_000)]}}
+
+      "getTokenAccountsByOwner", [_treasury, _, _] ->
+        {:ok, %{"value" => [token_account(destination, 0)]}}
+
+      "getLatestBlockhash", _ ->
+        {:ok, %{"value" => %{"blockhash" => blockhash}}}
+
+      "sendTransaction", _ ->
+        {:ok, "sweep-pending"}
+
+      "getSignatureStatuses", [["sweep-pending"], _] ->
+        {:ok, %{"value" => [nil]}}
+
+      "getTokenAccountBalance", [^source, _] ->
+        {:ok, %{"value" => %{"amount" => "0"}}}
+    end)
+
+    assert {:ok, 60} = Solana.settle_profile(cap, owner, 30)
+  end
+
+  test "keeps the timeout error when confirmation fails and the source still holds funds" do
+    cap = "p_6789abcdefghijkmnpqrst"
+    {:ok, owner} = Solana.deposit_address(cap)
+    blockhash = Base58.encode(:binary.copy(<<7>>, 32))
+    source = Base58.encode(:binary.copy(<<8>>, 32))
+    destination = Base58.encode(:binary.copy(<<9>>, 32))
+
+    Application.delete_env(:whowasthere, :solana_profile_settle)
+    Application.put_env(:whowasthere, :solana_confirm_attempts, 1)
+
+    Application.put_env(:whowasthere, :solana_rpc_request, fn
+      "getTokenAccountsByOwner", [^owner, _, _] ->
+        {:ok, %{"value" => [token_account(source, 30_000_000)]}}
+
+      "getTokenAccountsByOwner", [_treasury, _, _] ->
+        {:ok, %{"value" => [token_account(destination, 0)]}}
+
+      "getLatestBlockhash", _ ->
+        {:ok, %{"value" => %{"blockhash" => blockhash}}}
+
+      "sendTransaction", _ ->
+        {:ok, "sweep-stuck"}
+
+      "getSignatureStatuses", [["sweep-stuck"], _] ->
+        {:ok, %{"value" => [nil]}}
+
+      "getTokenAccountBalance", [^source, _] ->
+        {:ok, %{"value" => %{"amount" => "30000000"}}}
+    end)
+
+    assert {:error, :sweep_confirmation_timeout} = Solana.settle_profile(cap, owner, 30)
   end
 
   defp token_account(address, amount) do

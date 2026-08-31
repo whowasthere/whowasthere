@@ -13,11 +13,16 @@ defmodule WhoWasThereWeb.Router do
   pipeline :site do
     plug :accepts, ["html", "json"]
     plug :fetch_session
+    plug :protect_from_forgery
     plug :put_secure_browser_headers
   end
 
   pipeline :ingest do
     plug WhoWasThereWeb.Plugs.CORS
+  end
+
+  pipeline :stripe_webhook do
+    plug :accepts, ["json"]
   end
 
   scope "/", WhoWasThereWeb do
@@ -31,6 +36,12 @@ defmodule WhoWasThereWeb.Router do
     get "/e.gif", IngestController, :pixel
     get "/t.js", IngestController, :script
     get "/health", SiteController, :health
+  end
+
+  scope "/", WhoWasThereWeb do
+    pipe_through :stripe_webhook
+
+    post "/stripe/webhook", StripeController, :webhook
   end
 
   scope "/", WhoWasThereWeb do
@@ -48,5 +59,6 @@ defmodule WhoWasThereWeb.Router do
     get "/pay", SiteController, :pay
     get "/renew", SiteController, :renew
     get "/notify", SiteController, :notify
+    post "/pay/checkout", SiteController, :checkout
   end
 end

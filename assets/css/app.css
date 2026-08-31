@@ -636,6 +636,14 @@ a.chip:hover {
   display: none;
 }
 
+.readme-follow > .eyebrow {
+  margin-bottom: 0.25rem;
+}
+
+.readme-follow > .eyebrow + h2 {
+  margin-top: 0.75rem;
+}
+
 /* ---------------------------------------------------------------- *
  *  Homepage start kit
  * ---------------------------------------------------------------- */
@@ -668,8 +676,8 @@ a.chip:hover {
 }
 
 .start-title {
-  max-width: 16ch;
-  margin-top: 0.9rem;
+  max-width: 12ch;
+  margin-top: 0;
   font-size: clamp(2.35rem, 7vw, 4rem);
   text-wrap: balance;
 }

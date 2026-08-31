@@ -1,6 +1,8 @@
 defmodule WhoWasThere.Billing.Solana do
   @moduledoc false
 
+  require Logger
+
   alias WhoWasThere.Base58
 
   @usdc_decimals 6
@@ -39,16 +41,32 @@ defmodule WhoWasThere.Billing.Solana do
       else
         with {:ok, destination} <- treasury_token_account(),
              {:ok, master_public, master_private} <- master_keypair() do
-          funded
-          |> Enum.reduce_while({:ok, 0}, fn source, {:ok, total} ->
-            case sweep(source, destination, owner, owner_private, master_public, master_private) do
-              {:ok, _signature} -> {:cont, {:ok, total + source.amount}}
-              {:error, _} = error -> {:halt, error}
-            end
-          end)
-          |> case do
-            {:ok, amount} -> {:ok, div(amount, 10 ** @usdc_decimals)}
-            error -> error
+          {swept, last_error} =
+            Enum.reduce(funded, {0, nil}, fn source, {total, error} ->
+              case sweep(source, destination, owner, owner_private, master_public, master_private) do
+                {:ok, _signature} ->
+                  {total + source.amount, error}
+
+                {:error, reason} ->
+                  {total, reason}
+              end
+            end)
+
+          cond do
+            swept > 0 ->
+              if last_error do
+                Logger.warning(
+                  "solana settle credited partial sweep usdc=#{div(swept, 10 ** @usdc_decimals)} error=#{inspect(last_error)}"
+                )
+              end
+
+              {:ok, div(swept, 10 ** @usdc_decimals)}
+
+            last_error ->
+              {:error, last_error}
+
+            true ->
+              {:ok, 0}
           end
         end
       end
@@ -119,7 +137,18 @@ defmodule WhoWasThere.Billing.Solana do
              %{"encoding" => "base64", "preflightCommitment" => "confirmed"}
            ]) do
         {:ok, signature} when is_binary(signature) ->
-          with :ok <- confirm_signature(signature, 40), do: {:ok, signature}
+          attempts = Application.get_env(:whowasthere, :solana_confirm_attempts, 40)
+
+          case confirm_signature(signature, attempts) do
+            :ok ->
+              {:ok, signature}
+
+            {:error, :sweep_confirmation_timeout} ->
+              resolve_uncertain_sweep(signature, source)
+
+            error ->
+              error
+          end
 
         error ->
           error
@@ -130,20 +159,78 @@ defmodule WhoWasThere.Billing.Solana do
   defp confirm_signature(_signature, 0), do: {:error, :sweep_confirmation_timeout}
 
   defp confirm_signature(signature, attempts_left) do
+    case signature_status(signature) do
+      :confirmed ->
+        :ok
+
+      :failed ->
+        {:error, :tx_failed}
+
+      :pending ->
+        Process.sleep(250)
+        confirm_signature(signature, attempts_left - 1)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  # sendTransaction returned a signature, but confirmation timed out. The transfer
+  # may still have landed — credit only when the chain shows success or the source
+  # ATA is empty (funds already left the deposit).
+  defp resolve_uncertain_sweep(signature, source) do
+    case signature_status(signature) do
+      :confirmed ->
+        {:ok, signature}
+
+      :failed ->
+        {:error, :tx_failed}
+
+      _ ->
+        case token_account_amount(source.address) do
+          {:ok, 0} ->
+            Logger.warning(
+              "solana sweep confirmation timed out; source emptied, treating as swept signature=#{signature}"
+            )
+
+            {:ok, signature}
+
+          {:ok, _remaining} ->
+            {:error, :sweep_confirmation_timeout}
+
+          error ->
+            error
+        end
+    end
+  end
+
+  defp signature_status(signature) do
     case rpc("getSignatureStatuses", [
            [signature],
            %{"searchTransactionHistory" => true}
          ]) do
       {:ok, %{"value" => [%{"err" => nil, "confirmationStatus" => status}]}}
       when status in ["confirmed", "finalized"] ->
-        :ok
+        :confirmed
 
       {:ok, %{"value" => [%{"err" => error} | _]}} when not is_nil(error) ->
-        {:error, :tx_failed}
+        :failed
 
-      {:ok, %{"value" => [_pending]}} ->
-        Process.sleep(250)
-        confirm_signature(signature, attempts_left - 1)
+      {:ok, %{"value" => [_status]}} ->
+        :pending
+
+      error ->
+        error
+    end
+  end
+
+  defp token_account_amount(address) do
+    case rpc("getTokenAccountBalance", [address, %{"commitment" => "confirmed"}]) do
+      {:ok, %{"value" => %{"amount" => amount}}} ->
+        case Integer.parse(to_string(amount)) do
+          {integer, ""} -> {:ok, integer}
+          _ -> {:error, :bad_token_amount}
+        end
 
       error ->
         error

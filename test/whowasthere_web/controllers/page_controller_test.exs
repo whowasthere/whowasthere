@@ -39,8 +39,10 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-pay-more")
     assert html =~ ~s(id="start-wallet-open")
     assert html =~ ~s(id="start-pay-check")
+    assert html =~ ~s(id="start-pay-card")
     assert html =~ ~s(id="start-pay-status")
     assert html =~ "Pay when you’re ready"
+    assert html =~ "Pay with card"
     assert html =~ "SITE_KEY"
 
     document = LazyHTML.from_fragment(html)
@@ -59,14 +61,13 @@ defmodule WhoWasThereWeb.PageControllerTest do
 
     nav = LazyHTML.query(document, ".site-nav")
 
-    assert LazyHTML.query(document, ".start-title") |> LazyHTML.text() =~ "Website analytics"
-    assert lead =~ "Who Was There gives you a private dashboard"
-    assert lead =~ "traffic, pages, referrers, devices, and journeys"
+    assert LazyHTML.query(document, ".start-title") |> LazyHTML.text() =~ "Who Was There"
+    assert lead =~ "without visitor profiles"
     assert lead =~ "no cookies"
-    assert lead =~ "no raw visit logs"
-    assert hosted =~ "Hosted here: 7 days free"
+    assert lead =~ "no raw hit log"
     assert hosted =~ "$30 USDC / year"
-    assert hosted =~ "Self-host for full control"
+    assert hosted =~ "7 days free"
+    assert hosted =~ "Self-host"
     assert LazyHTML.query(document, "#start-event") |> Enum.empty?()
     assert LazyHTML.query(document, "#start-pixel") |> Enum.empty?()
     assert LazyHTML.query(document, "#start-curl") |> Enum.empty?()
@@ -74,8 +75,12 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert LazyHTML.query(nav, ".chip") |> Enum.empty?()
     refute LazyHTML.text(nav) =~ "start"
     refute LazyHTML.text(nav) =~ "curl /new"
-    assert html =~ "This instance uses:"
-    assert html =~ "One plan for every site in a payment profile"
+
+    # Wizard covers create + tracker; docs pick up from dashboard onward.
+    refute html =~ ~s(id="create-a-site")
+    refute html =~ "Put this in <code>head</code>"
+    assert html =~ ~s(id="dashboard")
+    assert html =~ "One payment profile · unlimited sites"
     assert html =~ "500,000 pageviews / month"
     assert html =~ "private <code>pay URL</code>"
     assert html =~ "Blockchain transaction ids are never credentials"
@@ -85,7 +90,7 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ "analytics.example.com/new?pay=p_SECRET"
     assert html =~ "mix phx.server"
     assert html =~ "http://localhost:4000"
-    assert html =~ "curl -s #{host}/new"
+    assert html =~ "curl -s http://localhost:4000/new"
     assert html =~ "#{host}/w.js"
     assert html =~ "#{host}/d/TOKEN"
     refute html =~ "Then open #{host}"

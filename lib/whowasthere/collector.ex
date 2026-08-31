@@ -847,9 +847,20 @@ defmodule WhoWasThere.Collector do
   end
 
   defp persist_site(id, day, snap) do
-    Store.save_day(id, day, snap)
+    case Store.save_day(id, day, snap) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        require Logger
+        Logger.warning("persist_site failed site=#{id} day=#{day} error=#{inspect(reason)}")
+        :ok
+    end
   rescue
-    _ -> :ok
+    error ->
+      require Logger
+      Logger.warning("persist_site crashed site=#{id} day=#{day} error=#{inspect(error)}")
+      :ok
   end
 
   defp load_from_store(today) do

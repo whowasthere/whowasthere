@@ -1,7 +1,7 @@
 defmodule WhoWasThere.Ingest do
   @moduledoc false
 
-  alias WhoWasThere.{Collector, Stamp}
+  alias WhoWasThere.{Billing, Collector, Stamp}
 
   def accept(conn, data) do
     tag = str(data["s"] || data["site"])
@@ -9,6 +9,7 @@ defmodule WhoWasThere.Ingest do
 
     case Stamp.verify_ingest(tag, host) do
       {:ok, %{id: id, nonce: nonce, payment_id: payment_id, host: locked}} ->
+        _ = Billing.materialize_payment(payment_id)
         {src, medium, campaign} = campaign_fields(data["q"] || data["query"] || "")
 
         Collector.ingest(%{

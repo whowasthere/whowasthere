@@ -17,6 +17,8 @@ config :whowasthere,
   usdc_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   solana_network: "mainnet-beta",
   solana_rpc: "https://api.mainnet-beta.solana.com",
+  stripe_secret_key: nil,
+  stripe_webhook_secret: nil,
   mailer: :log,
   mail_from: "Who Was There <noreply@whowasthere.dev>"
 
