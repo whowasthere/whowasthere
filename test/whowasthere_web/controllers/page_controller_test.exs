@@ -43,7 +43,7 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(data-stripe=)
     assert html =~ "payment-btn--primary"
     assert html =~ "Pay or renew"
-    assert html =~ "Pay with card"
+    assert html =~ "Pay by card"
     assert html =~ "Save these two links"
     assert html =~ "SITE_KEY"
 

@@ -16,7 +16,7 @@ defmodule WhoWasThereWeb.PageHTML do
     <div class="start-snip">
       <pre id={@id}><code>{@code}</code></pre>
       <button type="button" class="copy-btn copy-btn-always" data-copy-target={@id} id={"#{@id}-copy"}>
-        copy
+        Copy
       </button>
     </div>
     """

@@ -9,13 +9,13 @@ defmodule WhoWasThereWeb.DashLive do
   @ranges [{:today, "today"}, {:d7, "7d"}, {:d30, "30d"}, {:d90, "90d"}]
 
   @dim_cards [
-    {"page", "Pages", "Views by path"},
-    {"entry", "Landings", "First page of the visit"},
-    {"exit", "Exits", "Last page before they left"},
+    {"page", "Pages", "Pageviews by path"},
+    {"entry", "Landings", "First page in each session"},
+    {"exit", "Exits", "Last page in each session"},
     {"ref", "Referrers", "Sites that sent this traffic"},
-    {"src", "Source", "UTM source"},
+    {"src", "Sources", "UTM source"},
     {"medium", "Medium", "UTM medium"},
-    {"campaign", "Campaign", "UTM campaign"},
+    {"campaign", "Campaigns", "UTM campaign"},
     {"lang", "Languages", "Browser language"},
     {"click", "Clicks", "Buttons, links, [data-wwt]"},
     {"event", "Events", "Custom window.wwt() calls"}
@@ -135,7 +135,7 @@ defmodule WhoWasThereWeb.DashLive do
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <span class="pulse" />
-              <span class="eyebrow">{@report.live} active now</span>
+              <span class="eyebrow">live now · {@report.live}</span>
             </div>
             <h1 class={[
               "mt-3 truncate text-3xl font-semibold tracking-tighter sm:text-4xl",
@@ -175,7 +175,7 @@ defmodule WhoWasThereWeb.DashLive do
                   @billing.kind == "paid" && "text-primary",
                   @billing.expired? && "text-error"
                 ]}>
-                  {@billing.kind}
+                  {plan_label(@billing.kind)}
                 </span>
                 <span class="text-base-content/45">
                   · {plan_aside(@billing)}
@@ -197,7 +197,7 @@ defmodule WhoWasThereWeb.DashLive do
             </div>
           </div>
           <p :if={@billing.expired?} class="mt-3 text-xs text-error/80">
-            Hits are being dropped. Send {Billing.price_usdc()} USDC to the address in your saved payment URL, then open that URL to confirm the payment.
+            Pageviews are being dropped. Open your saved payment link to renew by card or with USDC.
           </p>
         </section>
 
@@ -205,7 +205,7 @@ defmodule WhoWasThereWeb.DashLive do
           <.stat
             label="Pageviews"
             value={Format.compact(@report.pageviews)}
-            hint="views in this range"
+            hint="in the selected period"
             accent
           />
           <.stat
@@ -216,14 +216,14 @@ defmodule WhoWasThereWeb.DashLive do
           <.stat
             label="Sessions"
             value={Format.compact(@report.sessions)}
-            hint="visits in this range"
+            hint="in the selected period"
           />
           <.stat
             label="Bounce rate"
             value={Format.pct(@report.bounce_rate)}
-            hint="left after one page"
+            hint="single-page sessions"
           />
-          <.stat label="Avg. time" value={Format.duration(@report.avg_ms)} hint="per session" />
+          <.stat label="Avg. session time" value={Format.duration(@report.avg_ms)} hint="per session" />
         </section>
 
         <.panel
@@ -242,7 +242,7 @@ defmodule WhoWasThereWeb.DashLive do
           <.panel
             id="chart-devices"
             title="Devices"
-            hint="Desktop, phone, tablet"
+            hint="Desktop, mobile, tablet"
             payload={@charts["chart-devices"]}
             height="h-52"
           />
@@ -256,7 +256,7 @@ defmodule WhoWasThereWeb.DashLive do
           <.panel
             id="chart-sessions"
             title="Engagement"
-            hint="Bounced vs stayed"
+            hint="Bounced vs engaged sessions"
             payload={@charts["chart-sessions"]}
             height="h-52"
           />
@@ -273,7 +273,7 @@ defmodule WhoWasThereWeb.DashLive do
           <.panel
             id="chart-viewport"
             title="Screens"
-            hint="Viewport width buckets"
+            hint="Grouped by viewport width"
             payload={@charts["chart-viewport"]}
             height="h-56"
           />
@@ -285,7 +285,7 @@ defmodule WhoWasThereWeb.DashLive do
             kind="chain"
             title="Session paths"
             rows={@report.dims["chain"] || []}
-            hint="One path per visit, clicks included, up to 8 steps"
+            hint="One path per session, including clicks; up to 8 steps"
             path
           />
           <.dim
@@ -413,14 +413,19 @@ defmodule WhoWasThereWeb.DashLive do
     engaged = max(sessions - bounces, 0)
 
     [
-      %{key: "Stayed", pageviews: engaged},
+      %{key: "Engaged", pageviews: engaged},
       %{key: "Bounced", pageviews: bounces}
     ]
   end
 
   defp session_slices(_), do: []
 
-  defp plan_aside(%{expired?: true}), do: "expired · hits dropped"
+  defp plan_label("comp"), do: "Complimentary"
+  defp plan_label("paid"), do: "Paid"
+  defp plan_label("trial"), do: "Trial"
+  defp plan_label(kind), do: kind
+
+  defp plan_aside(%{expired?: true}), do: "expired · pageviews dropped"
   defp plan_aside(%{days_left: 0}), do: "ends today"
   defp plan_aside(%{days_left: 1}), do: "1 day left"
   defp plan_aside(%{days_left: n}), do: "#{n} days left"
@@ -434,5 +439,5 @@ defmodule WhoWasThereWeb.DashLive do
   defp quota_pct(_), do: 0
 
   defp unique_hint(:today), do: "estimated for today"
-  defp unique_hint(_), do: "sum of daily uniques"
+  defp unique_hint(_), do: "sum of daily estimates"
 end

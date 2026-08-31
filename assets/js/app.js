@@ -58,12 +58,12 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 liveSocket.connect()
 
 const copyFrom = async (button, text) => {
-  const label = button.dataset.label || "copy"
+  const label = button.dataset.label || "Copy"
   try {
     await navigator.clipboard.writeText(text)
-    button.textContent = "copied"
+    button.textContent = "Copied"
   } catch {
-    button.textContent = "failed"
+    button.textContent = "Copy failed"
   }
   setTimeout(() => (button.textContent = label), 1500)
 }
@@ -76,7 +76,7 @@ const addCopyButtons = () => {
     const button = document.createElement("button")
     button.type = "button"
     button.className = "copy-btn"
-    button.textContent = "copy"
+    button.textContent = "Copy"
     button.addEventListener("click", () => {
       const code = pre.querySelector("code") || pre
       copyFrom(button, code.innerText.trim())
@@ -88,7 +88,7 @@ const addCopyButtons = () => {
   document.querySelectorAll("[data-copy-target]").forEach(button => {
     if (button.dataset.copyBound) return
     button.dataset.copyBound = "1"
-    button.dataset.label = button.textContent.trim() || "copy"
+    button.dataset.label = button.textContent.trim() || "Copy"
     button.addEventListener("click", () => {
       const target = document.getElementById(button.dataset.copyTarget)
       if (!target) return
@@ -110,6 +110,19 @@ const fillCode = (id, text) => {
   code.textContent = text
 }
 
+const planStatus = (plan, until) => {
+  switch (plan) {
+    case "paid":
+      return until ? `Paid through ${until}` : "Paid"
+    case "comp":
+      return until ? `Complimentary access through ${until}` : "Complimentary access"
+    case "trial":
+      return until ? `Free trial ends ${until}` : "Free trial"
+    default:
+      return plan || ""
+  }
+}
+
 const paymentStatus = (data, checked = false) => {
   const status = document.getElementById("start-pay-status")
   if (!status) return
@@ -117,13 +130,12 @@ const paymentStatus = (data, checked = false) => {
   const until = data.expires ? String(data.expires).slice(0, 10) : ""
   if (data.plan === "paid" || data.plan === "comp") {
     status.dataset.state = "paid"
-    const plan = data.plan === "comp" ? "Complimentary access" : "Paid"
-    status.textContent = until ? `${plan} through ${until}` : plan
+    status.textContent = planStatus(data.plan, until)
   } else {
     status.dataset.state = "waiting"
     status.textContent = checked
-      ? "No confirmed payment yet. Try again after the transfer confirms."
-      : `Free trial ends ${until}`
+      ? "No confirmed USDC payment yet. Try again once the transfer has been confirmed."
+      : planStatus(data.plan, until)
   }
 }
 
@@ -213,8 +225,7 @@ const showIssued = (data, checked = false) => {
     if (site) site.textContent = data.site || ""
     if (plan) {
       const until = data.expires ? String(data.expires).slice(0, 10) : ""
-      const name = data.plan === "comp" ? "complimentary" : (data.plan || "")
-      plan.textContent = until ? `${name} through ${until}` : name
+      plan.textContent = planStatus(data.plan, until)
     }
     meta.hidden = false
   }
@@ -299,9 +310,9 @@ const bootStart = () => {
     } catch (error) {
       if (status) {
         status.dataset.state = "error"
-        status.textContent = error.message || "Card checkout failed."
+        status.textContent = error.message || "Couldn’t start the card payment."
       }
-      cardBtn.textContent = "Pay with card"
+      cardBtn.textContent = "Pay by card"
       cardBtn.disabled = false
     }
   })
@@ -325,7 +336,7 @@ const bootStart = () => {
       showIssued(updated, true)
       try { sessionStorage.setItem(LAST_SITE, JSON.stringify(updated)) } catch { /* ignore */ }
       checkBtn.textContent =
-        data.plan === "paid" || data.plan === "comp" ? "Payment found" : "Check again"
+        data.plan === "paid" || data.plan === "comp" ? "Payment confirmed" : "Check again"
     } catch (error) {
       if (status) {
         status.dataset.state = "error"

@@ -763,15 +763,30 @@ defmodule WhoWasThere.Billing do
 
     cond do
       days < 0 and not noticed?(meta, "expired") ->
-        Mailer.send(meta.email, "Who Was There expired", expiry_body(meta, :expired))
+        Mailer.send(
+          meta.email,
+          "Your Who Was There plan has expired",
+          expiry_body(meta, :expired)
+        )
+
         notice(meta, "expired")
 
       meta.kind == "trial" and days in 0..2 and not noticed?(meta, "trial_soon") ->
-        Mailer.send(meta.email, "Who Was There trial ends soon", expiry_body(meta, :trial_soon))
+        Mailer.send(
+          meta.email,
+          "Your Who Was There trial ends soon",
+          expiry_body(meta, :trial_soon)
+        )
+
         notice(meta, "trial_soon")
 
       meta.kind == "paid" and days in 0..14 and not noticed?(meta, "year_soon") ->
-        Mailer.send(meta.email, "Who Was There renews soon", expiry_body(meta, :year_soon))
+        Mailer.send(
+          meta.email,
+          "Your Who Was There plan expires soon",
+          expiry_body(meta, :year_soon)
+        )
+
         notice(meta, "year_soon")
 
       true ->
@@ -784,11 +799,21 @@ defmodule WhoWasThere.Billing do
   defp maybe_quota_mail(meta) do
     cond do
       meta.hits_month >= meta_cap(meta) and not noticed?(meta, "quota_full") ->
-        Mailer.send(meta.email, "Who Was There monthly cap reached", quota_body(meta, :full))
+        Mailer.send(
+          meta.email,
+          "Who Was There: monthly pageview limit reached",
+          quota_body(meta, :full)
+        )
+
         notice(meta, "quota_full")
 
       meta.hits_month >= div(meta_cap(meta) * 4, 5) and not noticed?(meta, "quota_80") ->
-        Mailer.send(meta.email, "Who Was There at 80% of monthly cap", quota_body(meta, :warn))
+        Mailer.send(
+          meta.email,
+          "Who Was There: 80% of monthly pageview limit used",
+          quota_body(meta, :warn)
+        )
+
         notice(meta, "quota_80")
 
       true ->
@@ -800,32 +825,32 @@ defmodule WhoWasThere.Billing do
     profile = PaymentProfile.get_by_payment(meta.id)
 
     """
-    who was there
+    Who Was There
 
     payment  #{meta.id}
     plan     #{meta.kind}
     expires  #{DateTime.to_iso8601(meta.expires_at)}
 
     #{case kind do
-      :trial_soon -> "Your 7-day trial ends soon. Fund the payment profile to keep collecting."
-      :year_soon -> "Your paid year ends soon. Fund the payment profile to extend it."
-      :expired -> "This plan has expired. Hits are dropped until the payment profile is funded."
+      :trial_soon -> "Your 7-day free trial ends soon. Open your private payment link to keep collecting pageviews."
+      :year_soon -> "Your paid plan expires soon. Open your private payment link to renew."
+      :expired -> "Your plan has expired. Pageviews are being dropped until you renew."
     end}
 
     deposit  #{if profile, do: profile.deposit_address, else: "unavailable"}
-    settle   open the private payment URL saved with the dashboard
+    renew    open the private payment URL saved with the dashboard
     """
   end
 
   defp quota_body(meta, kind) do
     """
-    who was there
+    Who Was There
 
     payment  #{meta.id}
     month    #{meta.month}
-    hits     #{meta.hits_month} / #{meta_cap(meta)}
+    views    #{meta.hits_month} / #{meta_cap(meta)}
 
-    #{if kind == :full, do: "The monthly pageview cap is reached. Further pageviews are dropped until next month.", else: "You are at about 80% of the monthly pageview cap."}
+    #{if kind == :full, do: "You have reached the monthly pageview limit. Additional pageviews will be dropped until next month.", else: "You have used about 80% of the monthly pageview limit."}
     """
   end
 

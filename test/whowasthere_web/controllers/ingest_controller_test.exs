@@ -57,7 +57,7 @@ defmodule WhoWasThereWeb.IngestControllerTest do
   test "a forged pay capability does not materialize", %{conn: conn} do
     forged = "p_23456789abcdefghijkmnp"
     conn = get(conn, "/pay?pay=#{forged}&format=json")
-    assert json_response(conn, 404)["error"] == "unknown payment"
+    assert json_response(conn, 404)["error"] == "Payment profile not found."
     assert WhoWasThere.PaymentProfile.get_by_cap(forged) == nil
   end
 
@@ -68,7 +68,7 @@ defmodule WhoWasThereWeb.IngestControllerTest do
     assert first["pay"] =~ "p_"
 
     unknown = get(recycle(conn), ~p"/pay?pay=p_not_a_real_profile&format=json")
-    assert json_response(unknown, 404)["error"] == "unknown payment"
+    assert json_response(unknown, 404)["error"] == "Payment profile not found."
   end
 
   test "the same payment capability keeps its deposit address", %{conn: conn} do

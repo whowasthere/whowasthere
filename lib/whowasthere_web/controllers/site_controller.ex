@@ -18,12 +18,15 @@ defmodule WhoWasThereWeb.SiteController do
       wanted != "" and not ID.valid?(wanted) ->
         conn
         |> put_status(400)
-        |> respond(params, %{error: "id must be 8–32 characters: letters, digits, _ or -"})
+        |> respond(params, %{
+          error:
+            "ID must be 8–32 characters and contain only lowercase letters, digits, underscores, or hyphens."
+        })
 
       wanted != "" and (Collector.site?(wanted) || Store.get_site(wanted)) ->
         conn
         |> put_status(409)
-        |> respond(params, %{error: "id is taken, pick another"})
+        |> respond(params, %{error: "That ID is already taken. Choose another."})
 
       true ->
         case Billing.start_for_profile(pay_cap, email) do
@@ -156,17 +159,22 @@ defmodule WhoWasThereWeb.SiteController do
   defp status_for(:email_required), do: 400
   defp status_for(_), do: 400
 
-  defp error_text(:unknown_payment), do: "unknown payment"
-  defp error_text(:tx_failed), do: "solana transaction failed"
-  defp error_text(:pay_master_key_missing), do: "payment master key is not configured"
-  defp error_text(:bad_pay_master_key), do: "payment master key is invalid"
-  defp error_text(:treasury_token_account_missing), do: "treasury USDC token account is missing"
-  defp error_text(:sweep_confirmation_timeout), do: "solana sweep was not confirmed in time"
-  defp error_text(:stripe_not_configured), do: "card payments are not configured"
-  defp error_text(:bad_amount), do: "amount must be a multiple of 30 USDC"
-  defp error_text(:bad_email), do: "email looks invalid"
-  defp error_text(:email_required), do: "email required"
-  defp error_text(other), do: "payment error: #{inspect(other)}"
+  defp error_text(:unknown_payment), do: "Payment profile not found."
+  defp error_text(:tx_failed), do: "The Solana transaction failed."
+  defp error_text(:pay_master_key_missing), do: "The payment master key is not configured."
+  defp error_text(:bad_pay_master_key), do: "The payment master key is invalid."
+
+  defp error_text(:treasury_token_account_missing),
+    do: "The treasury USDC token account is missing."
+
+  defp error_text(:sweep_confirmation_timeout),
+    do: "The Solana transfer was not confirmed in time."
+
+  defp error_text(:stripe_not_configured), do: "Card payments are not configured."
+  defp error_text(:bad_amount), do: "The amount must be a multiple of $30."
+  defp error_text(:bad_email), do: "Enter a valid email address."
+  defp error_text(:email_required), do: "An email address is required."
+  defp error_text(other), do: "Payment error: #{inspect(other)}"
 
   defp parse_amount(nil), do: Billing.price_usdc()
 
@@ -203,7 +211,7 @@ defmodule WhoWasThereWeb.SiteController do
     whowasthere
 
     site     #{p.site}
-    pay      #{p.pay}   (#{p.plan}, until #{p.expires})
+    pay      #{p.pay}   (#{p.plan}, expires #{p.expires})
     pay URL  #{p.pay_url}   ← secret; keep it with the dashboard URL
     deposit  #{p.deposit}   (USDC on Solana)
     wallet   #{p.solana_pay}

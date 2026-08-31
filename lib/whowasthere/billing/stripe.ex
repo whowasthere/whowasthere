@@ -42,8 +42,7 @@ defmodule WhoWasThere.Billing.Stripe do
       {"line_items[0][quantity]", "1"},
       {"line_items[0][price_data][currency]", "usd"},
       {"line_items[0][price_data][unit_amount]", Integer.to_string(unit_amount)},
-      {"line_items[0][price_data][product_data][name]",
-       "Who Was There · #{amount_usdc} USDC year"},
+      {"line_items[0][price_data][product_data][name]", "Who Was There — annual plan"},
       {"integration_identifier", integration}
     ]
 
