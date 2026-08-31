@@ -117,12 +117,13 @@ const paymentStatus = (data, checked = false) => {
   const until = data.expires ? String(data.expires).slice(0, 10) : ""
   if (data.plan === "paid" || data.plan === "comp") {
     status.dataset.state = "paid"
-    status.textContent = `${data.plan} until ${until}`
+    const plan = data.plan === "comp" ? "Complimentary access" : "Paid"
+    status.textContent = until ? `${plan} through ${until}` : plan
   } else {
     status.dataset.state = "waiting"
     status.textContent = checked
       ? "No confirmed payment yet. Try again after the transfer confirms."
-      : `trial until ${until}`
+      : `Free trial ends ${until}`
   }
 }
 
@@ -212,7 +213,8 @@ const showIssued = (data, checked = false) => {
     if (site) site.textContent = data.site || ""
     if (plan) {
       const until = data.expires ? String(data.expires).slice(0, 10) : ""
-      plan.textContent = until ? `${data.plan} until ${until}` : (data.plan || "")
+      const name = data.plan === "comp" ? "complimentary" : (data.plan || "")
+      plan.textContent = until ? `${name} through ${until}` : name
     }
     meta.hidden = false
   }
@@ -234,16 +236,16 @@ const bootStart = () => {
     const url = root.dataset.newUrl
     if (!url) return
     createBtn.disabled = true
-    createBtn.textContent = "creating…"
+    createBtn.textContent = "Creating…"
     try {
       const res = await fetch(url, {headers: {Accept: "application/json"}})
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "failed")
       showIssued(data)
       try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
-      createBtn.textContent = "create another"
+      createBtn.textContent = "Create another"
     } catch {
-      createBtn.textContent = "failed"
+      createBtn.textContent = "Try again"
       setTimeout(() => (createBtn.textContent = "Create a site"), 1800)
     } finally {
       createBtn.disabled = false
@@ -272,7 +274,7 @@ const bootStart = () => {
     if (!lastIssued?.pay || !root.dataset.checkoutUrl) return
 
     cardBtn.disabled = true
-    cardBtn.textContent = "redirecting…"
+    cardBtn.textContent = "Redirecting…"
     const status = document.getElementById("start-pay-status")
     const csrf = document.querySelector("meta[name='csrf-token']")?.content
 
@@ -309,7 +311,7 @@ const bootStart = () => {
     if (!lastIssued?.pay_url) return
 
     checkBtn.disabled = true
-    checkBtn.textContent = "checking…"
+    checkBtn.textContent = "Checking…"
     const status = document.getElementById("start-pay-status")
 
     try {
@@ -322,13 +324,14 @@ const bootStart = () => {
       const updated = {...lastIssued, ...data}
       showIssued(updated, true)
       try { sessionStorage.setItem(LAST_SITE, JSON.stringify(updated)) } catch { /* ignore */ }
-      checkBtn.textContent = data.plan === "paid" || data.plan === "comp" ? "payment found" : "check again"
+      checkBtn.textContent =
+        data.plan === "paid" || data.plan === "comp" ? "Payment found" : "Check again"
     } catch (error) {
       if (status) {
         status.dataset.state = "error"
         status.textContent = error.message || "Payment check failed."
       }
-      checkBtn.textContent = "try again"
+      checkBtn.textContent = "Try again"
     } finally {
       checkBtn.disabled = false
     }

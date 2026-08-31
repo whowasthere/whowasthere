@@ -63,6 +63,6 @@ defmodule WhoWasThereWeb.DashLiveTest do
 
   test "unknown token is denied", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/d/notarealtoken0000001")
-    assert html =~ "This link does not work"
+    assert html =~ "This link doesn’t work"
   end
 end

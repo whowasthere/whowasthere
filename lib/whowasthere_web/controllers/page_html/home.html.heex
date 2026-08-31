@@ -9,13 +9,14 @@
     <div class="start-hero">
       <h1 class="display-title start-title">Who Was There</h1>
       <p class="start-lead">
-        Website analytics with no login and no visitor profiles. Two private links replace
-        an account. One script, daily totals only — no cookies, no raw hit log.
+        Simple website analytics without accounts or visitor profiles. Two private links give you
+        access to stats and billing. A tiny script records daily aggregates — no cookies or raw
+        hit logs.
       </p>
       <p class="start-hosted">
-        <a href="#pricing">$30 / year</a>
-        after 7 days free. <a href="#self-host">Self-host</a>
-        if you want the keys.
+        <a href="#pricing">$30 a year</a>
+        after a 7-day free trial. <a href="#self-host">Self-host</a>
+        for full control.
       </p>
     </div>
 
@@ -28,8 +29,8 @@
         <div>
           <h2>Create a site</h2>
           <p>
-            No signup. Instead of a password you get two secret links — save them like
-            keys. Lose them and you lose access.
+            No signup. You get two private links instead of a password. Treat them like keys: if
+            you lose them, you lose access.
           </p>
           <button type="button" id="start-create" class="start-go">Create a site</button>
           <p id="start-meta" class="start-meta" hidden>
@@ -42,7 +43,9 @@
         <span class="start-n num">02</span>
         <div>
           <h2>Paste the tracker</h2>
-          <p>One tag on your site. Use the same origin as this page.</p>
+          <p>
+            Paste this one tag into your site. It reports to the instance where you created it.
+          </p>
           <.copy_block
             id="start-snippet"
             code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
@@ -55,8 +58,8 @@
         <div>
           <h2>Save these two links</h2>
           <p>
-            That is your “account”. Dashboard opens stats. Pay link is how you pay and
-            renew later — by card or USDC.
+            Together, these links replace an account. The dashboard shows your stats; the payment
+            link handles payments and renewals by card or USDC.
           </p>
           <p class="start-sub">Dashboard</p>
           <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
@@ -70,7 +73,7 @@
           >
             Open dashboard
           </a>
-          <p class="start-sub">Pay / renew</p>
+          <p class="start-sub">Payments and renewals</p>
           <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
           <a
             id="start-pay-open"
@@ -80,7 +83,7 @@
             rel="noopener noreferrer"
             hidden
           >
-            Open pay page
+            Open payment page
           </a>
         </div>
       </li>
@@ -90,11 +93,11 @@
         <div>
           <h2>Pay or renew</h2>
           <p>
-            First year or next year — same steps. Card: choose the amount, click <strong>Pay with card</strong>. Crypto: send that much USDC on Solana, then <strong>I’ve paid — check</strong>. Open your saved pay link anytime to do
-            this again.
+            Use the same page for your first payment and every renewal. Choose an amount, then pay
+            by card or send USDC on Solana. After sending USDC, click <strong>Check USDC payment</strong>.
           </p>
           <p id="start-payment-empty" class="payment-empty">
-            Create a site first — card and deposit details show up here.
+            Create a site to see payment options and deposit details.
           </p>
           <div id="start-payment" class="payment-card" hidden>
             <div class="payment-qr-wrap">
@@ -106,7 +109,7 @@
                 role="img"
                 aria-label="Solana Pay QR code"
               ></canvas>
-              <p>Scan with a Solana Pay wallet</p>
+              <p>Scan with a Solana Pay-compatible wallet</p>
             </div>
             <div class="payment-details">
               <p class="start-sub payment-amount-label">Amount</p>
@@ -153,7 +156,7 @@
                   </a>
                 </div>
                 <button type="button" id="start-pay-check" class="payment-btn payment-btn--ghost">
-                  I’ve paid — check
+                  Check USDC payment
                 </button>
               </div>
               <p id="start-pay-status" class="payment-status" aria-live="polite"></p>
@@ -191,16 +194,16 @@
         <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="text-sm text-base-content/55">
-              One pay link · unlimited sites
+              One payment link · unlimited sites
             </p>
             <p class="mt-2 text-4xl font-semibold tracking-tighter sm:text-5xl">
               30 <span class="text-xl text-primary sm:text-2xl">USD / year</span>
             </p>
           </div>
           <p class="max-w-sm text-sm leading-relaxed text-base-content/55">
-            No accounts — your saved pay link is how you pay and renew. Card or USDC on Solana.
-            Next year: open that link and pay again the same way. Extra $30 adds another
-            500,000 pageviews / month.
+            Your private payment link handles payments and renewals — no account required. Pay by
+            card or with USDC on Solana. Each additional $30 raises the shared monthly limit by
+            500,000 pageviews.
           </p>
         </div>
       </div>
@@ -211,11 +214,11 @@
         </div>
         <div class="px-6 py-5 sm:px-8">
           <p class="eyebrow">included</p>
-          <p class="mt-2 text-sm">500,000 pageviews / month</p>
+          <p class="mt-2 text-sm">500,000 pageviews per month</p>
         </div>
         <div class="px-6 py-5 sm:px-8">
           <p class="eyebrow">top-up</p>
-          <p class="mt-2 text-sm">+500,000 per extra 30 USDC</p>
+          <p class="mt-2 text-sm">+500,000 pageviews per additional $30</p>
         </div>
       </div>
     </div>

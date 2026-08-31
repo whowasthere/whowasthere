@@ -113,10 +113,11 @@ defmodule WhoWasThereWeb.DashLive do
     <Layouts.shell flash={@flash}>
       <section class="mx-auto max-w-lg py-20 text-center sm:py-28">
         <p class="eyebrow">/d/…</p>
-        <h1 class="mt-5 text-2xl font-semibold tracking-tight">This link does not work</h1>
+        <h1 class="mt-5 text-2xl font-semibold tracking-tight">This link doesn’t work</h1>
         <p class="mt-3 leading-relaxed text-base-content/60">
-          The dashboard is only the secret URL printed by <code class="font-mono text-primary">curl /new</code>. The key in your snippet opens
-          nothing.
+          Only the secret dashboard URL returned by
+          <code class="font-mono text-primary">curl /new</code>
+          works here. The tracking key in your snippet cannot open the dashboard.
         </p>
         <div class="panel mt-8 px-4 py-3 text-left">
           <p class="num text-sm">curl -s {url(~p"/new")}</p>
@@ -134,7 +135,7 @@ defmodule WhoWasThereWeb.DashLive do
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <span class="pulse" />
-              <span class="eyebrow">{@report.live} live now</span>
+              <span class="eyebrow">{@report.live} active now</span>
             </div>
             <h1 class={[
               "mt-3 truncate text-3xl font-semibold tracking-tighter sm:text-4xl",
@@ -146,7 +147,7 @@ defmodule WhoWasThereWeb.DashLive do
               {@id} · {Date.to_iso8601(@report.from)} → {Date.to_iso8601(@report.to)}
             </p>
             <p :if={is_nil(@host)} class="mt-1 text-xs text-base-content/35">
-              The first visit will name this site.
+              The first visit will set the hostname.
             </p>
           </div>
 
@@ -196,7 +197,7 @@ defmodule WhoWasThereWeb.DashLive do
             </div>
           </div>
           <p :if={@billing.expired?} class="mt-3 text-xs text-error/80">
-            Hits are dropped. Send {Billing.price_usdc()} USDC to the address in your saved payment URL, then open that URL to settle it.
+            Hits are being dropped. Send {Billing.price_usdc()} USDC to the address in your saved payment URL, then open that URL to confirm the payment.
           </p>
         </section>
 
@@ -290,7 +291,7 @@ defmodule WhoWasThereWeb.DashLive do
           <.dim
             class="lg:col-span-2"
             kind="flow"
-            title="Page to page"
+            title="Page transitions"
             rows={@report.dims["flow"] || []}
             hint="Consecutive pages in a session"
             path

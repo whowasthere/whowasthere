@@ -1,8 +1,8 @@
 # Who Was There
 
-Who Was There is a small Elixir service for website analytics. It does not store raw visits. Each hit is reduced to counters, unique estimates, and top lists, then thrown away.
+Who Was There is a small Elixir service for website analytics. It does not store raw visits. Each hit is reduced to counters, unique estimates, and ranked breakdowns, then discarded.
 
-There are no accounts. Creating a site gives you two private links instead of a login: a dashboard URL for stats, and a pay URL for billing. Save both like passwords — lose them and you lose access.
+There are no accounts. Creating a site gives you two private links instead of a login: a dashboard URL for stats and a payment URL for billing. Treat both like passwords: if you lose them, you lose access.
 
 The tracker is about 2 KB and sets no cookies. SQLite keeps only daily aggregates.
 
@@ -40,14 +40,14 @@ curl -sH 'Accept: application/json' https://whowasthere.fyi/new
 curl -s 'https://whowasthere.fyi/new?format=json'
 ```
 
-You can pick the public id, lock the site to a host, reuse a private payment profile, and leave an email for reminders:
+You can choose the public ID, lock the site to a host, reuse a private payment profile, and add an email address for reminders:
 
 ```bash
 curl -s 'https://whowasthere.fyi/new?id=my-blog&host=example.com'
 curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 ```
 
-The public `id` is 8–32 characters (`a-z`, `0-9`, `_`, `-`). It appears in the snippet as the first part of `data-w`. If that id already has a visit, `/new?id=` returns 409.
+The public `id` is 8–32 characters (`a-z`, `0-9`, `_`, `-`). It appears in the snippet as the first part of `data-w`. If that ID has already received a visit, `/new?id=` returns 409.
 
 `/new` signs an ingest key (`id.nonce.payment.mac`) and a dashboard token with the server secret. Without `pay` it issues a private payment capability and a **7-day trial** clock that starts when the profile is first used (first hit, `/pay`, or `/notify`). The capability is not written to the database until then, so empty `/new` spam does not fill SQLite. Passing `email=` persists immediately so reminders have a row. Save both secret URLs from the response; every call without `pay` issues another capability. Hits whose `data-w` is missing or forged are ignored.
 
@@ -63,7 +63,7 @@ Put this in `<head>` or before `</body>`. The script URL must use the same insta
 <script src="https://whowasthere.fyi/w.js" data-w="SITE_KEY" defer></script>
 ```
 
-On load it sends a pageview. Client-side route changes (React, Vue, Next, hash routers, Turbo) send another pageview: the tracker wraps `history.pushState` / `replaceState`, listens to `popstate`, `hashchange`, and `navigate`, and also checks the URL every second in case something re-wraps `history`. Clicks use capture on `document` plus `composedPath()`, so nodes added later and Shadow DOM still count. If `sendBeacon` is missing or blocked, it falls back to `fetch` with `keepalive`. Back-forward cache restores (`pageshow`) send a view again. Links, buttons, `[role=button]`, and `[data-wwt]` are tracked (`click:Label`). Set `data-wwt="Buy"` if the visible text is noisy. Heartbeats run while the tab is visible. On leave it sends a close signal. It does not set cookies.
+On load, it sends a pageview. Client-side route changes (React, Vue, Next, hash routers, Turbo) send another pageview: the tracker wraps `history.pushState` / `replaceState`, listens to `popstate`, `hashchange`, and `navigate`, and also checks the URL every second in case something re-wraps `history`. Clicks use capture on `document` plus `composedPath()`, so nodes added later and elements in Shadow DOM still count. If `sendBeacon` is missing or blocked, the tracker falls back to `fetch` with `keepalive`. Back-forward cache restores (`pageshow`) send another view. Links, buttons, `[role=button]`, and `[data-wwt]` are tracked (`click:Label`). Set `data-wwt="Buy"` if the visible text is noisy. Heartbeats run while the tab is visible. When the visitor leaves, the tracker sends a close signal. It does not set cookies.
 
 Events POST back to the same `/w.js` URL the script was loaded from. There is no `/collect`, no pixel filename, and no `analytics` in the path. Lists that block third-party scripts by hostname will still win if the file is served from a known tracker domain; the usual fix is to proxy `/w.js` on your own site and point the snippet at that origin:
 
@@ -85,7 +85,7 @@ Without JavaScript you can count pageviews only:
 <img src="https://whowasthere.fyi/w.js?s=SITE_KEY" alt="" width="1" height="1">
 ```
 
-Custom events (they do not increment pageviews):
+Custom events do not increment pageviews:
 
 ```js
 wwt('signup')
@@ -98,18 +98,18 @@ Names are trimmed to 40 characters.
 
 Open the secret URL returned by `/new`, for example: `https://whowasthere.fyi/d/TOKEN`.
 
-The public id does not work as a dashboard path. The page updates live. You can switch between today, 7, 30, and 90 days.
+The public ID is not a dashboard URL. The page updates live. You can switch between today and the last 7, 30, or 90 days.
 
 | Metric | Meaning |
 | --- | --- |
 | Pageviews | `v` hits |
-| Uniques | HyperLogLog, about 1.6% error. For one day this is the HLL estimate. For a range it is the **sum of daily** uniques |
+| Uniques | HyperLogLog, about 1.6% error. For a single day, this is the HLL estimate. For a range, it is the **sum of daily** uniques |
 | Sessions | a gap longer than 30 minutes starts a new session |
 | Bounce rate | sessions with at most one pageview |
 | Avg. time | total duration / sessions |
 | Live | sessions active in the last 5 minutes |
 | Journeys | one sequence per session including clicks, up to 8 steps |
-| Steps | page `A → B` |
+| Steps | consecutive page transitions, such as `A → B` |
 | Clicks | link/button/`data-wwt` clicks |
 | Landings / exits | first and last page of a session |
 | Pages / referrers / UTM / geo / devices / events | top 20, at most 150 keys per kind |
@@ -118,7 +118,7 @@ Country comes from a CDN header (`CF-IPCountry`, `CloudFront-Viewer-Country`, `x
 
 ## What is not stored
 
-IP addresses, User-Agent strings, cookies, and individual hits never hit disk.
+IP addresses, User-Agent strings, cookies, and individual hits are never written to disk.
 
 Uniques use a salt that rotates every UTC day, so the same person is not linked across days. A session lives in ETS for 30 minutes and keeps a short chain of pages and clicks (at most 8 steps). The dashboard shows the current chain while the session is open; when it expires, that finished sequence is counted once and the last page is an exit. Intermediate prefixes are not stored. Individual visit trails are not stored.
 
@@ -130,13 +130,13 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 ## Payment details
 
-**$30 / year** — card (Stripe, when configured) or USDC on Solana. One pay link covers unlimited sites and a shared **500 000 pageviews / month**. Pay more in one go and the monthly cap grows by **500 000 for every extra $30** ($60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you pay again.
+**$30 a year** — by card (Stripe, when configured) or with USDC on Solana. One payment link covers unlimited sites with a shared limit of **500,000 pageviews per month**. Pay more at once and the monthly limit grows by **500,000 for every additional $30** ($60 → 1,000,000, $90 → 1,500,000). You get a **7-day free trial**; when the trial or paid year ends, hits are dropped until you pay again.
 
 The first `/new` response includes a private `pay URL` and a permanent Solana deposit address. The homepage shows **Pay with card**, a wallet button, and a QR after you create a site.
 
-**Card:** open your pay link (or stay on the homepage after create), pick the amount, click **Pay with card**. Stripe Checkout charges USD and activates the plan when the webhook confirms.
+**Card:** open your payment link (or stay on the homepage after creating a site), choose the amount, and click **Pay with card**. Stripe Checkout charges the card in USD and activates the plan after the webhook confirms the payment.
 
-**Solana:** send USDC to the deposit address, then click **I’ve paid — check**, open the pay URL, or call `/pay?pay=p_SECRET`. The instance sweeps confirmed USDC into `PAY_WALLET`. Blockchain transaction ids are never credentials.
+**Solana:** send USDC to the deposit address, then click **Check USDC payment**, open the payment URL, or call `/pay?pay=p_SECRET`. The instance sweeps confirmed USDC into `PAY_WALLET`. Blockchain transaction IDs are never credentials.
 
 ```bash
 curl -s https://whowasthere.fyi/new
@@ -148,9 +148,9 @@ curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 
 ### Renew
 
-Same pay link forever — first year and every renewal.
+Use the same payment link for the first year and every renewal.
 
-**Card:** open the saved pay URL (or recreate a site with `?pay=p_SECRET`), choose $30 (or more), click **Pay with card** again. Each successful Checkout adds another year from the current expiry (or from now if expired) and grows the monthly quota the same way as crypto.
+**Card:** open the saved payment URL (or create another site with `?pay=p_SECRET`), choose $30 or more, and click **Pay with card** again. Each successful checkout adds another year from the current expiry, or from the current date if the plan has expired. It also raises the monthly limit in the same way as a USDC payment.
 
 **Solana:** send another 30 USDC to the same deposit address, then settle:
 
@@ -160,11 +160,11 @@ curl -s 'https://whowasthere.fyi/renew?pay=p_SECRET'
 curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
 ```
 
-After settlement, one year is added to the current expiry. Calling either endpoint with an empty deposit only returns status — it does not extend twice. Each settled $30 adds quota: monthly allowance is 500,000 pageviews for every complete 30 USDC/USD ever settled on the profile.
+After settlement, one year is added to the plan. Calling either endpoint when the deposit address is empty only returns the current status; it cannot extend the plan twice. Every settled $30 gives the profile 500,000 monthly pageviews.
 
-There is no background watcher for crypto and no transaction id to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` is what checks and settles the Solana address. Card renewals settle via Stripe webhooks.
+There is no background watcher for crypto and no transaction ID to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` checks and settles the Solana address. Card renewals settle via Stripe webhooks.
 
-Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses your Postal server when `POSTAL_URL` and `POSTAL_API_KEY` are set, or Resend when `RESEND_API_KEY` is set. Postal takes precedence when both are configured.
+Email is optional. If you add an address (`/new?email=` or `/notify?pay=p_SECRET&email=`), you receive a message when the trial or paid year is about to end, when it expires, and when usage reaches about 80% or 100% of the monthly pageview limit. Delivery uses your Postal server when `POSTAL_URL` and `POSTAL_API_KEY` are set, or Resend when `RESEND_API_KEY` is set. Postal takes precedence when both are configured.
 
 ## API
 
@@ -224,7 +224,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 ## Self-host
 
-You need Elixir 1.17 or newer (1.20 / OTP 29 is what we test on). Mix is enough; SQLite is embedded. A self-hosted operator can grant private profiles for their own sites directly from the server console; blockchain payment configuration is only needed when the instance accepts paid profiles from other people.
+You need Elixir 1.17 or newer; we test with Elixir 1.20 and OTP 29. SQLite is embedded, so no external database is required. A self-hosted operator can grant private profiles for their own sites directly from the server console. Blockchain payment configuration is only needed when the instance accepts payments from other people.
 
 ```bash
 mix setup
@@ -239,7 +239,7 @@ mix test
 mix ecto.reset
 ```
 
-In development the database file is `config/whowasthere_dev.db`.
+In development, the database file is `config/whowasthere_dev.db`.
 Development issues deterministic demo deposit addresses and never settles them; do not send funds to those addresses.
 
 ### Free profiles for your own sites
@@ -324,13 +324,13 @@ POSTAL_URL='https://postal.example.com'
 POSTAL_API_KEY='...'
 ```
 
-Generate `PAY_MASTER_KEY` once as a base58-encoded 32-byte seed, back it up, and keep a small SOL balance on its public address for sweep fees. The production deploy workflow generates it in the correct format when it is absent. `PAY_WALLET` can remain a separate treasury whose private key is kept offline. To print the fee-payer address from a configured release:
+Generate `PAY_MASTER_KEY` once as a base58-encoded 32-byte seed, back it up, and keep a small SOL balance at its public address for sweep fees. The production deployment workflow generates it in the correct format when it is absent. `PAY_WALLET` can remain a separate treasury whose private key is kept offline. To print the fee-payer address from a configured release:
 
 ```bash
 bin/whowasthere eval 'IO.inspect(WhoWasThere.Billing.Solana.master_address())'
 ```
 
-The payer's wallet creates the derived owner's USDC associated token account on its first transfer. No background chain watcher runs: `/pay?pay=p_SECRET` and `/new?pay=p_SECRET` query that owner, sweep its confirmed USDC balance, wait for the sweep to be confirmed, and only then update the plan. Public transaction ids are never accepted as proof of payment.
+The payer’s wallet creates the derived owner’s USDC associated token account during the first transfer. There is no background blockchain watcher: `/pay?pay=p_SECRET` and `/new?pay=p_SECRET` query that owner, sweep its confirmed USDC balance, wait for confirmation, and only then update the plan. Public transaction IDs are never accepted as proof of payment.
 
 ## License
 
@@ -339,7 +339,7 @@ GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
 ## Internals
 
 1. `POST /w.js` verifies the signed ingest key, parses the user agent, takes country from a header, and does **not** persist the hit. The site row is created on that first verified visit.
-2. `WhoWasThere.Collector` keeps today's counters, HyperLogLog, tops, and sessions in ETS.
+2. `WhoWasThere.Collector` keeps today’s counters, HyperLogLog sketch, ranked dimensions, and sessions in ETS.
 3. Dirty sites flush to SQLite every 15 seconds (5 seconds in dev).
 4. The dashboard reads today from ETS and older days from SQLite.
 

@@ -64,12 +64,12 @@ defmodule WhoWasThereWeb.PageControllerTest do
     nav = LazyHTML.query(document, ".site-nav")
 
     assert LazyHTML.query(document, ".start-title") |> LazyHTML.text() =~ "Who Was There"
-    assert lead =~ "no login"
-    assert lead =~ "no visitor profiles"
+    assert lead =~ "without accounts"
+    assert lead =~ "visitor profiles"
     assert lead =~ "no cookies"
-    assert lead =~ "no raw hit log"
-    assert hosted =~ "$30 / year"
-    assert hosted =~ "7 days free"
+    assert lead =~ "raw hit logs"
+    assert hosted =~ "$30 a year"
+    assert hosted =~ "7-day free trial"
     assert hosted =~ "Self-host"
     assert LazyHTML.query(document, "#start-event") |> Enum.empty?()
     assert LazyHTML.query(document, "#start-pixel") |> Enum.empty?()
@@ -83,10 +83,10 @@ defmodule WhoWasThereWeb.PageControllerTest do
     refute html =~ ~s(id="create-a-site")
     refute html =~ "Put this in <code>head</code>"
     assert html =~ ~s(id="dashboard")
-    assert html =~ "One pay link · unlimited sites"
-    assert html =~ "500,000 pageviews / month"
+    assert html =~ "One payment link · unlimited sites"
+    assert html =~ "500,000 pageviews per month"
     assert html =~ "private <code>pay URL</code>"
-    assert html =~ "Blockchain transaction ids are never credentials"
+    assert html =~ "Blockchain transaction IDs are never credentials"
     assert html =~ ~s(id="self-host")
     assert html =~ "Free profiles for your own sites"
     assert html =~ "WhoWasThere.Billing.grant"
