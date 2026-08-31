@@ -40,7 +40,8 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-wallet-open")
     assert html =~ ~s(id="start-pay-check")
     assert html =~ ~s(id="start-pay-card")
-    assert html =~ ~s(id="start-pay-status")
+    assert html =~ ~s(data-stripe=)
+    assert html =~ "payment-btn--primary"
     assert html =~ "Pay when you’re ready"
     assert html =~ "Pay with card"
     assert html =~ "SITE_KEY"

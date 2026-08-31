@@ -5,8 +5,11 @@ defmodule WhoWasThere.Billing.Stripe do
   @api_version "2026-07-29.dahlia"
 
   def configured? do
-    secret_key() not in [nil, ""] and webhook_secret() not in [nil, ""]
+    present?(secret_key()) and present?(webhook_secret())
   end
+
+  defp present?(value) when is_binary(value), do: String.trim(value) != ""
+  defp present?(_), do: false
 
   def create_checkout_session(attrs) when is_map(attrs) do
     case Application.get_env(:whowasthere, :stripe_create_checkout) do

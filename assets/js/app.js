@@ -192,7 +192,13 @@ const showIssued = (data, checked = false) => {
     if (network) network.textContent = `Solana · ${data.network || "mainnet-beta"}`
     if (qr && paymentUri) drawPaymentQr(qr, paymentUri)
     const cardBtn = document.getElementById("start-pay-card")
-    if (cardBtn) cardBtn.hidden = !data.stripe
+    if (cardBtn) {
+      const stripeOn =
+        data.stripe === true ||
+        data.stripe === "true" ||
+        document.getElementById("start")?.dataset.stripe === "true"
+      cardBtn.hidden = !stripeOn
+    }
     paymentStatus(data, checked)
   }
 

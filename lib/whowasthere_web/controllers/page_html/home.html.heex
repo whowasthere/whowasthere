@@ -4,6 +4,7 @@
     class="start"
     data-new-url={~p"/new?format=json"}
     data-checkout-url={~p"/pay/checkout"}
+    data-stripe={to_string(@stripe_enabled)}
   >
     <div class="start-hero">
       <h1 class="display-title start-title">Who Was There</h1>
@@ -114,11 +115,25 @@
               <p class="start-sub">Deposit address</p>
               <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
               <div class="payment-actions">
-                <a id="start-wallet-open" class="start-open" href="#" hidden>Open wallet</a>
-                <button type="button" id="start-pay-card" class="start-go" hidden>
-                  Pay with card
-                </button>
-                <button type="button" id="start-pay-check" class="start-go">
+                <div class="payment-pay-ways">
+                  <button
+                    type="button"
+                    id="start-pay-card"
+                    class="payment-btn payment-btn--primary"
+                    hidden
+                  >
+                    Pay with card
+                  </button>
+                  <a
+                    id="start-wallet-open"
+                    class="payment-btn payment-btn--secondary"
+                    href="#"
+                    hidden
+                  >
+                    Open Solana wallet
+                  </a>
+                </div>
+                <button type="button" id="start-pay-check" class="payment-btn payment-btn--ghost">
                   I’ve paid — check
                 </button>
               </div>
