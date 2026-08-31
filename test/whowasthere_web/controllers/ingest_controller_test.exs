@@ -49,6 +49,8 @@ defmodule WhoWasThereWeb.IngestControllerTest do
 
     assert body["plan"] == "trial"
     assert body["deposit"] == created["deposit"]
+    assert body["pay_url"] =~ "/pay?pay=#{created["pay"]}"
+    assert body["solana_pay"] =~ "solana:#{created["deposit"]}"
 
     assert WhoWasThere.PaymentProfile.get_by_cap(created["pay"]).deposit_address ==
              created["deposit"]

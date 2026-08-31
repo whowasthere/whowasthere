@@ -168,6 +168,16 @@ const solanaPayForAmount = (uri, amount) => {
   }
 }
 
+// Safari rejects `a.href = "solana:…"` (TypeError: pattern). setAttribute works.
+const setAnchorHref = (el, href) => {
+  if (!el || !href) return
+  try {
+    el.href = href
+  } catch {
+    el.setAttribute("href", href)
+  }
+}
+
 const showIssued = (data, checked = false) => {
   lastIssued = data
   fillCode("start-snippet", data.snippet)
@@ -177,7 +187,7 @@ const showIssued = (data, checked = false) => {
 
   const link = document.getElementById("start-dash-open")
   if (link && data.dash) {
-    link.href = data.dash
+    setAnchorHref(link, data.dash)
     link.hidden = false
   }
 
@@ -190,7 +200,7 @@ const showIssued = (data, checked = false) => {
   const network = document.getElementById("start-pay-network")
   const qr = document.getElementById("start-pay-qr")
   if (payLink && data.pay_url) {
-    payLink.href = data.pay_url
+    setAnchorHref(payLink, data.pay_url)
     payLink.hidden = false
   }
   if (payment && data.pay_url && data.deposit) {
@@ -200,7 +210,7 @@ const showIssued = (data, checked = false) => {
     payment.hidden = false
     if (paymentEmpty) paymentEmpty.hidden = true
     if (walletLink && paymentUri) {
-      walletLink.href = paymentUri
+      setAnchorHref(walletLink, paymentUri)
       walletLink.hidden = false
     }
     if (amount) amount.textContent = `${selectedAmount} USDC`
@@ -281,6 +291,7 @@ const bootStart = () => {
   })
 
   const cardBtn = document.getElementById("start-pay-card")
+  const cardLabel = cardBtn?.textContent?.trim() || "Pay by card"
   cardBtn?.addEventListener("click", async () => {
     if (!lastIssued?.pay || !root.dataset.checkoutUrl) return
 
@@ -312,31 +323,45 @@ const bootStart = () => {
         status.dataset.state = "error"
         status.textContent = error.message || "Couldn’t start the card payment."
       }
-      cardBtn.textContent = "Pay by card"
+      cardBtn.textContent = cardLabel
       cardBtn.disabled = false
     }
   })
 
   const checkBtn = document.getElementById("start-pay-check")
+  const checkLabel = checkBtn?.textContent?.trim() || "Check USDC payment"
   checkBtn?.addEventListener("click", async () => {
-    if (!lastIssued?.pay_url) return
+    if (!lastIssued?.pay) return
 
     checkBtn.disabled = true
     checkBtn.textContent = "Checking…"
     const status = document.getElementById("start-pay-status")
 
     try {
-      const url = new URL(lastIssued.pay_url, window.location.href)
+      const url = new URL("/pay", window.location.origin)
+      url.searchParams.set("pay", lastIssued.pay)
       url.searchParams.set("format", "json")
       const res = await fetch(url, {headers: {Accept: "application/json"}})
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "failed")
 
-      const updated = {...lastIssued, ...data}
+      const payUrl =
+        lastIssued.pay_url || `${window.location.origin}/pay?pay=${encodeURIComponent(data.pay || lastIssued.pay)}`
+      const updated = {
+        ...lastIssued,
+        ...data,
+        pay: data.pay || lastIssued.pay,
+        pay_url: payUrl,
+        site: lastIssued.site,
+        dash: lastIssued.dash,
+        snippet: lastIssued.snippet,
+        key: lastIssued.key,
+        selected_amount_usdc: lastIssued.selected_amount_usdc
+      }
       showIssued(updated, true)
       try { sessionStorage.setItem(LAST_SITE, JSON.stringify(updated)) } catch { /* ignore */ }
       checkBtn.textContent =
-        data.plan === "paid" || data.plan === "comp" ? "Payment confirmed" : "Check again"
+        data.plan === "paid" || data.plan === "comp" ? "Payment confirmed" : checkLabel
     } catch (error) {
       if (status) {
         status.dataset.state = "error"

@@ -75,6 +75,7 @@ defmodule WhoWasThereWeb.SiteController do
 
         respond(conn, params, %{
           pay: params["pay"],
+          pay_url: "#{base}/pay?pay=#{params["pay"]}",
           deposit: profile.deposit_address,
           amount_usdc: info.amount_usdc,
           mint: info.mint,
