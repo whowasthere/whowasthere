@@ -176,13 +176,16 @@ const showIssued = (data, checked = false) => {
   const less = document.getElementById("start-pay-less")
   const network = document.getElementById("start-pay-network")
   const qr = document.getElementById("start-pay-qr")
+  if (payLink && data.pay_url) {
+    payLink.href = data.pay_url
+    payLink.hidden = false
+  }
   if (payment && data.pay_url && data.deposit) {
     const selectedAmount = selectedPaymentAmount(data)
     const paymentUri = solanaPayForAmount(data.solana_pay, selectedAmount)
     lastIssued.selected_amount_usdc = selectedAmount
     payment.hidden = false
     if (paymentEmpty) paymentEmpty.hidden = true
-    if (payLink) payLink.href = data.pay_url
     if (walletLink && paymentUri) {
       walletLink.href = paymentUri
       walletLink.hidden = false

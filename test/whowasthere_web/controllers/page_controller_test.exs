@@ -42,8 +42,9 @@ defmodule WhoWasThereWeb.PageControllerTest do
     assert html =~ ~s(id="start-pay-card")
     assert html =~ ~s(data-stripe=)
     assert html =~ "payment-btn--primary"
-    assert html =~ "Pay when you’re ready"
+    assert html =~ "Pay or renew"
     assert html =~ "Pay with card"
+    assert html =~ "Save these two links"
     assert html =~ "SITE_KEY"
 
     document = LazyHTML.from_fragment(html)
@@ -63,10 +64,11 @@ defmodule WhoWasThereWeb.PageControllerTest do
     nav = LazyHTML.query(document, ".site-nav")
 
     assert LazyHTML.query(document, ".start-title") |> LazyHTML.text() =~ "Who Was There"
-    assert lead =~ "without visitor profiles"
+    assert lead =~ "no login"
+    assert lead =~ "no visitor profiles"
     assert lead =~ "no cookies"
     assert lead =~ "no raw hit log"
-    assert hosted =~ "$30 USDC / year"
+    assert hosted =~ "$30 / year"
     assert hosted =~ "7 days free"
     assert hosted =~ "Self-host"
     assert LazyHTML.query(document, "#start-event") |> Enum.empty?()
@@ -81,7 +83,7 @@ defmodule WhoWasThereWeb.PageControllerTest do
     refute html =~ ~s(id="create-a-site")
     refute html =~ "Put this in <code>head</code>"
     assert html =~ ~s(id="dashboard")
-    assert html =~ "One payment profile · unlimited sites"
+    assert html =~ "One pay link · unlimited sites"
     assert html =~ "500,000 pageviews / month"
     assert html =~ "private <code>pay URL</code>"
     assert html =~ "Blockchain transaction ids are never credentials"

@@ -9,11 +9,11 @@
     <div class="start-hero">
       <h1 class="display-title start-title">Who Was There</h1>
       <p class="start-lead">
-        Website analytics without visitor profiles. One small script, a private dashboard,
-        daily aggregates only — no cookies, no raw hit log.
+        Website analytics with no login and no visitor profiles. Two private links replace
+        an account. One script, daily totals only — no cookies, no raw hit log.
       </p>
       <p class="start-hosted">
-        <a href="#pricing">$30 USDC / year</a>
+        <a href="#pricing">$30 / year</a>
         after 7 days free. <a href="#self-host">Self-host</a>
         if you want the keys.
       </p>
@@ -27,7 +27,10 @@
         <span class="start-n num">01</span>
         <div>
           <h2>Create a site</h2>
-          <p>No account. You get a tracker key and two secret links — save both.</p>
+          <p>
+            No signup. Instead of a password you get two secret links — save them like
+            keys. Lose them and you lose access.
+          </p>
           <button type="button" id="start-create" class="start-go">Create a site</button>
           <p id="start-meta" class="start-meta" hidden>
             site <span data-site class="num"></span> · <span data-plan></span>
@@ -39,7 +42,7 @@
         <span class="start-n num">02</span>
         <div>
           <h2>Paste the tracker</h2>
-          <p>One tag in your pages. Same origin as this instance.</p>
+          <p>One tag on your site. Use the same origin as this page.</p>
           <.copy_block
             id="start-snippet"
             code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
@@ -50,8 +53,12 @@
       <li class="panel start-step">
         <span class="start-n num">03</span>
         <div>
-          <h2>Keep the dashboard</h2>
-          <p>Private URL. Not in the snippet — bookmark it.</p>
+          <h2>Save these two links</h2>
+          <p>
+            That is your “account”. Dashboard opens stats. Pay link is how you pay and
+            renew later — by card or USDC.
+          </p>
+          <p class="start-sub">Dashboard</p>
           <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
           <a
             id="start-dash-open"
@@ -63,19 +70,31 @@
           >
             Open dashboard
           </a>
+          <p class="start-sub">Pay / renew</p>
+          <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
+          <a
+            id="start-pay-open"
+            class="start-open"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            hidden
+          >
+            Open pay page
+          </a>
         </div>
       </li>
 
       <li id="start-pay-step" class="panel start-step">
         <span class="start-n num">04</span>
         <div>
-          <h2>Pay when you’re ready</h2>
+          <h2>Pay or renew</h2>
           <p>
-            After the trial, send USDC on Solana to this profile’s deposit address.
-            Same address for renewals and top-ups.
+            First year or next year — same steps. Card: choose the amount, click <strong>Pay with card</strong>. Crypto: send that much USDC on Solana, then <strong>I’ve paid — check</strong>. Open your saved pay link anytime to do
+            this again.
           </p>
           <p id="start-payment-empty" class="payment-empty">
-            Create a site first — payment details appear here.
+            Create a site first — card and deposit details show up here.
           </p>
           <div id="start-payment" class="payment-card" hidden>
             <div class="payment-qr-wrap">
@@ -112,7 +131,7 @@
                 </button>
               </div>
               <p id="start-pay-network" class="payment-network">Solana · mainnet-beta</p>
-              <p class="start-sub">Deposit address</p>
+              <p class="start-sub">USDC deposit address</p>
               <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
               <div class="payment-actions">
                 <div class="payment-pay-ways">
@@ -138,19 +157,6 @@
                 </button>
               </div>
               <p id="start-pay-status" class="payment-status" aria-live="polite"></p>
-            </div>
-            <div class="payment-secret">
-              <p class="start-sub">Private payment URL — keep with the dashboard</p>
-              <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
-              <a
-                id="start-pay-open"
-                class="start-open"
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open payment profile
-              </a>
             </div>
           </div>
         </div>
@@ -185,16 +191,16 @@
         <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="text-sm text-base-content/55">
-              One payment profile · unlimited sites
+              One pay link · unlimited sites
             </p>
             <p class="mt-2 text-4xl font-semibold tracking-tighter sm:text-5xl">
-              30 <span class="text-xl text-primary sm:text-2xl">USDC / year</span>
+              30 <span class="text-xl text-primary sm:text-2xl">USD / year</span>
             </p>
           </div>
-          <p class="max-w-xs text-sm leading-relaxed text-base-content/55">
-            Pay on Solana or by card (when enabled). Open your private pay URL to settle crypto;
-            card checkout activates the plan via Stripe.
-            Extra 30 USDC/USD adds another 500,000 pageviews / month.
+          <p class="max-w-sm text-sm leading-relaxed text-base-content/55">
+            No accounts — your saved pay link is how you pay and renew. Card or USDC on Solana.
+            Next year: open that link and pay again the same way. Extra $30 adds another
+            500,000 pageviews / month.
           </p>
         </div>
       </div>

@@ -1145,12 +1145,6 @@ a.chip:hover {
   color: var(--color-error) !important;
 }
 
-.payment-secret {
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 0.15rem;
-}
-
 @media (max-width: 560px) {
   .payment-card {
     grid-template-columns: 1fr;
@@ -1168,9 +1162,5 @@ a.chip:hover {
   .payment-btn--ghost {
     align-self: stretch;
     text-align: left;
-  }
-
-  .payment-secret {
-    grid-column: auto;
   }
 }

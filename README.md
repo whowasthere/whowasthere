@@ -2,7 +2,7 @@
 
 Who Was There is a small Elixir service for website analytics. It does not store raw visits. Each hit is reduced to counters, unique estimates, and top lists, then thrown away.
 
-There are no accounts. You create a site with one HTTP request, put a script on your pages, and keep a private dashboard link.
+There are no accounts. Creating a site gives you two private links instead of a login: a dashboard URL for stats, and a pay URL for billing. Save both like passwords — lose them and you lose access.
 
 The tracker is about 2 KB and sets no cookies. SQLite keeps only daily aggregates.
 
@@ -130,17 +130,17 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 ## Payment details
 
-**$30 / year** — USDC on Solana, or card via Stripe when `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set (hosted service). A payment profile covers unlimited sites and a shared **500 000 pageviews / month**. Send more before settlement (or pay a larger card amount) and the monthly cap grows by **500 000 for every extra $30** (so $60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until the profile is funded again.
+**$30 / year** — card (Stripe, when configured) or USDC on Solana. One pay link covers unlimited sites and a shared **500 000 pageviews / month**. Pay more in one go and the monthly cap grows by **500 000 for every extra $30** ($60 → 1 000 000, $90 → 1 500 000). Without payment you get a **7-day trial**; after that (or when the year ends) hits are dropped until you pay again.
 
-The first `/new` response contains a private `pay URL`, a permanent Solana deposit address derived from its `p_SECRET`, and a Solana Pay URI. The homepage turns that URI into a wallet button and QR code after it creates a site; its amount control moves in 30 USDC steps and rebuilds both. When Stripe is configured it also shows **Pay with card** for the same amount in USD.
+The first `/new` response includes a private `pay URL` and a permanent Solana deposit address. The homepage shows **Pay with card**, a wallet button, and a QR after you create a site.
 
-**Solana:** send USDC to the deposit address, then use **I’ve paid — check**, open the payment URL, or create another site with the same `pay` value. The instance sweeps confirmed USDC into `PAY_WALLET` and activates the profile. Blockchain transaction ids are never credentials.
+**Card:** open your pay link (or stay on the homepage after create), pick the amount, click **Pay with card**. Stripe Checkout charges USD and activates the plan when the webhook confirms.
 
-**Card:** `POST /pay/checkout` with `pay` and `amount` (CSRF required in the browser) creates a Stripe Checkout Session. Stripe webhooks (`POST /stripe/webhook`) activate the profile; the same session is credited only once.
+**Solana:** send USDC to the deposit address, then click **I’ve paid — check**, open the pay URL, or call `/pay?pay=p_SECRET`. The instance sweeps confirmed USDC into `PAY_WALLET`. Blockchain transaction ids are never credentials.
 
 ```bash
 curl -s https://whowasthere.fyi/new
-# save p_SECRET and the payment URL from the response; send 30 USDC to its deposit address, then:
+# save the dashboard URL and pay URL; then either pay by card on the site, or:
 curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
 # every later site can share that profile:
 curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
@@ -148,7 +148,11 @@ curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 
 ### Renew
 
-The deposit address never changes. Send another 30 USDC to the same address and then check it with either endpoint:
+Same pay link forever — first year and every renewal.
+
+**Card:** open the saved pay URL (or recreate a site with `?pay=p_SECRET`), choose $30 (or more), click **Pay with card** again. Each successful Checkout adds another year from the current expiry (or from now if expired) and grows the monthly quota the same way as crypto.
+
+**Solana:** send another 30 USDC to the same deposit address, then settle:
 
 ```bash
 curl -s 'https://whowasthere.fyi/renew?pay=p_SECRET'
@@ -156,9 +160,9 @@ curl -s 'https://whowasthere.fyi/renew?pay=p_SECRET'
 curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
 ```
 
-After the sweep is confirmed, one year is added to the current expiry. If the plan has already expired, the new year starts when the payment is settled. Calling either endpoint again with an empty deposit address only returns the current status; it does not extend the plan twice. Each settled deposit adds quota: the shared monthly allowance is 500,000 pageviews for every complete 30 USDC ever settled on the profile (so a later 30 USDC top-up after 90 keeps 2,000,000, not 500,000).
+After settlement, one year is added to the current expiry. Calling either endpoint with an empty deposit only returns status — it does not extend twice. Each settled $30 adds quota: monthly allowance is 500,000 pageviews for every complete 30 USDC/USD ever settled on the profile.
 
-There is no background watcher and no transaction id to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` is what checks and settles the address.
+There is no background watcher for crypto and no transaction id to submit. Opening `/pay`, `/renew`, or `/new?pay=p_SECRET` is what checks and settles the Solana address. Card renewals settle via Stripe webhooks.
 
 Email is optional. If you set one (`/new?email=` or `/notify?pay=p_SECRET&email=`), you get mail when the trial or year is about to end, when it has expired, and at ~80% / 100% of the monthly pageview cap. Delivery uses your Postal server when `POSTAL_URL` and `POSTAL_API_KEY` are set, or Resend when `RESEND_API_KEY` is set. Postal takes precedence when both are configured.
 
