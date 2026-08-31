@@ -56,6 +56,33 @@ defmodule WhoWasThereWeb.IngestControllerTest do
              created["deposit"]
   end
 
+  test "GET /pay opens the browser payment flow", %{conn: conn} do
+    created = conn |> get(~p"/new?format=json") |> json_response(200)
+
+    conn =
+      conn
+      |> recycle()
+      |> put_req_header("accept", "text/html")
+      |> get("/pay?pay=#{created["pay"]}")
+
+    assert redirected_to(conn, 302) == "/?pay=#{created["pay"]}#start-pay-step"
+
+    html =
+      conn
+      |> recycle()
+      |> get(redirected_to(conn, 302))
+      |> html_response(200)
+
+    document = LazyHTML.from_fragment(html)
+    start = LazyHTML.query(document, "#start")
+
+    assert LazyHTML.attribute(start, "data-new-url") == [
+             "/new?pay=#{created["pay"]}&format=json"
+           ]
+
+    assert LazyHTML.attribute(start, "data-payment-url") == ["/pay"]
+  end
+
   test "a forged pay capability does not materialize", %{conn: conn} do
     forged = "p_23456789abcdefghijkmnp"
     conn = get(conn, "/pay?pay=#{forged}&format=json")

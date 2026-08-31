@@ -67,6 +67,15 @@ defmodule WhoWasThereWeb.SiteController do
   end
 
   def pay(conn, params) do
+    if browser_request?(conn, params) do
+      destination = "/?pay=#{URI.encode_www_form(params["pay"] || "")}#start-pay-step"
+      redirect(conn, to: destination)
+    else
+      payment_status(conn, params)
+    end
+  end
+
+  defp payment_status(conn, params) do
     base = base_url(conn)
 
     case Billing.payment_profile(params["pay"]) do
@@ -203,6 +212,11 @@ defmodule WhoWasThereWeb.SiteController do
       |> List.first()
       |> Kernel.||("")
       |> String.contains?("application/json")
+  end
+
+  defp browser_request?(conn, params) do
+    params["format"] != "json" and
+      Enum.any?(get_req_header(conn, "accept"), &String.contains?(&1, "text/html"))
   end
 
   defp plaintext(%{error: error}), do: "error: #{error}\n"

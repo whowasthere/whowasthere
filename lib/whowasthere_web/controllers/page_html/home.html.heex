@@ -2,7 +2,12 @@
   <section
     id="start"
     class="start"
-    data-new-url={~p"/new?format=json"}
+    data-new-url={
+      if @payment_cap,
+        do: ~p"/new?pay=#{@payment_cap}&format=json",
+        else: ~p"/new?format=json"
+    }
+    data-payment-url={~p"/pay"}
     data-checkout-url={~p"/pay/checkout"}
     data-stripe={to_string(@stripe_enabled)}
   >

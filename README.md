@@ -134,13 +134,13 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 The first `/new` response includes a private `pay URL` field and a permanent Solana deposit address. After you create a site, the homepage shows **Pay by card**, a wallet button, and a QR code.
 
-**Card:** open your payment link (or stay on the homepage after creating a site), choose the amount, and click **Pay by card**. Stripe Checkout charges the card in USD and activates the plan after the webhook confirms the payment.
+**Card:** open the payment link in a browser (or stay on the homepage after creating a site), choose the amount, and click **Pay by card**. Stripe Checkout charges the card in USD and activates the plan after the webhook confirms the payment.
 
-**Solana:** send USDC to the deposit address, then click **Check USDC payment**, open the payment URL, or call `/pay?pay=p_SECRET`. The instance sweeps confirmed USDC into `PAY_WALLET`. Blockchain transaction IDs are never credentials.
+**Solana:** send USDC to the deposit address, then click **Check USDC payment** in the browser or call `/pay?pay=p_SECRET` from an API client. The instance sweeps confirmed USDC into `PAY_WALLET`. Blockchain transaction IDs are never credentials.
 
 ```bash
 curl -s https://whowasthere.fyi/new
-# save the dashboard URL and pay URL, then open the payment page:
+# check the payment status or settle a confirmed USDC transfer:
 curl -s 'https://whowasthere.fyi/pay?pay=p_SECRET'
 # every later site can share that profile:
 curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
@@ -150,7 +150,7 @@ curl -s 'https://whowasthere.fyi/new?pay=p_SECRET&email=you@example.com'
 
 Use the same payment link for the first year and every renewal.
 
-**Card:** open the saved payment URL (or create another site with `?pay=p_SECRET`), choose $30 or more, and click **Pay by card** again. Each successful checkout adds another year from the current expiration date, or from today if the plan has expired. It also raises the monthly limit in the same way as a USDC payment.
+**Card:** open the saved payment URL in a browser, choose $30 or more, and click **Pay by card**. Each successful checkout adds another year from the current expiration date, or from today if the plan has expired. It also raises the monthly limit in the same way as a USDC payment.
 
 **Solana:** send another 30 USDC to the same deposit address, then check the payment:
 
@@ -172,7 +172,7 @@ Email is optional. If you add an address (`/new?email=` or `/notify?pay=p_SECRET
 | --- | --- | --- |
 | `GET` | `/new` | create a site (7-day trial) |
 | `GET` | `/new?id=&host=&pay=&email=&format=json` | same, optionally using a private payment profile |
-| `GET` | `/pay?pay=p_SECRET` | check and settle Solana deposits; show payment status |
+| `GET` | `/pay?pay=p_SECRET` | open payment options in a browser; check and settle Solana deposits through the API |
 | `POST` | `/pay/checkout` | start Stripe Checkout (`pay`, `amount`; browser CSRF) |
 | `POST` | `/stripe/webhook` | Stripe webhooks (signature required) |
 | `GET` | `/renew?pay=p_SECRET` | alias for `/pay` |

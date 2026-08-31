@@ -237,7 +237,7 @@ const showIssued = (data, checked = false) => {
       const until = data.expires ? String(data.expires).slice(0, 10) : ""
       plan.textContent = planStatus(data.plan, until)
     }
-    meta.hidden = false
+    meta.hidden = !data.site
   }
 }
 
@@ -245,11 +245,38 @@ const bootStart = () => {
   const root = document.getElementById("start")
   if (!root) return
 
-  try {
-    const saved = sessionStorage.getItem(LAST_SITE)
-    if (saved) showIssued(JSON.parse(saved))
-  } catch {
-    /* ignore */
+  const paymentCap = new URLSearchParams(window.location.search).get("pay")
+
+  if (!paymentCap) {
+    try {
+      const saved = sessionStorage.getItem(LAST_SITE)
+      if (saved) showIssued(JSON.parse(saved))
+    } catch {
+      /* ignore */
+    }
+  } else {
+    const paymentEmpty = document.getElementById("start-payment-empty")
+    if (paymentEmpty) paymentEmpty.textContent = "Loading payment options…"
+
+    const loadPaymentProfile = async () => {
+      try {
+        const url = new URL(root.dataset.paymentUrl || "/pay", window.location.origin)
+        url.searchParams.set("pay", paymentCap)
+        url.searchParams.set("format", "json")
+        const res = await fetch(url, {headers: {Accept: "application/json"}})
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || "Couldn’t load the payment profile.")
+
+        showIssued(data)
+        try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
+      } catch (error) {
+        if (paymentEmpty) {
+          paymentEmpty.textContent = error.message || "Couldn’t load the payment profile."
+        }
+      }
+    }
+
+    loadPaymentProfile()
   }
 
   const createBtn = document.getElementById("start-create")
