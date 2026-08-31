@@ -21,4 +21,25 @@ defmodule WhoWasThereWeb.PageHTML do
     </div>
     """
   end
+
+  def plan_status(plan, expires) do
+    date = String.slice(to_string(expires), 0, 10)
+
+    case plan do
+      "paid" -> "Paid through #{date}"
+      "comp" -> "Complimentary access through #{date}"
+      "trial" -> "Free trial ends #{date}"
+      _ -> to_string(plan)
+    end
+  end
+
+  def format_number(number) when is_integer(number) do
+    number
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.graphemes()
+    |> Enum.chunk_every(3)
+    |> Enum.map_join(",", &Enum.join/1)
+    |> String.reverse()
+  end
 end

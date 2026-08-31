@@ -132,7 +132,7 @@ The first visit (or `?host=` on `/new`) stores the hostname without `www.`. Late
 
 **$30 a year** — by card (Stripe, when configured) or with USDC on Solana. One payment link covers unlimited sites with a shared limit of **500,000 pageviews per month**. Pay more at once and the monthly limit grows by **500,000 for every additional $30** ($60 → 1,000,000, $90 → 1,500,000). You get a **7-day free trial**; when the trial or paid year ends, new pageviews are discarded until you renew.
 
-The first `/new` response includes a private `pay URL` field and a permanent Solana deposit address. After you create a site, the homepage shows **Pay by card**, a wallet button, and a QR code.
+The first `/new` response includes a private `pay URL` field and a permanent Solana deposit address. Open that URL in a browser for a dedicated payment page with the current plan status, amount controls, card payment, wallet link, and QR code.
 
 **Card:** open the payment link in a browser (or stay on the homepage after creating a site), choose the amount, and click **Pay by card**. Stripe Checkout charges the card in USD and activates the plan after the webhook confirms the payment.
 

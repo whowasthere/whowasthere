@@ -1,0 +1,127 @@
+<Layouts.shell flash={@flash}>
+  <section
+    id="payment-page"
+    class="payment-page"
+    data-pay={@pay}
+    data-pay-url={@pay_url}
+    data-deposit={@deposit}
+    data-solana-pay={@solana_pay}
+    data-amount-usdc={@amount_usdc}
+    data-network={@network}
+    data-plan={@plan}
+    data-expires={@expires}
+    data-month-cap={@month_cap}
+    data-stripe={to_string(@stripe)}
+    data-checkout-url={~p"/pay/checkout"}
+  >
+    <header class="payment-page-header">
+      <p class="eyebrow">private payment profile</p>
+      <h1>Pay or renew</h1>
+      <p>
+        Choose an amount, then pay by card or send USDC on Solana. A payment adds one year; every
+        $30 paid raises the shared monthly allowance by 500,000 pageviews.
+      </p>
+    </header>
+
+    <div class="panel payment-page-panel">
+      <div class="payment-page-summary">
+        <div>
+          <span>Status</span>
+          <strong id="payment-page-plan">{plan_status(@plan, @expires)}</strong>
+        </div>
+        <div>
+          <span>Shared allowance</span>
+          <strong id="payment-page-allowance">{format_number(@month_cap)} pageviews / month</strong>
+        </div>
+      </div>
+
+      <div id="start-payment" class="payment-card payment-card--standalone">
+        <div class="payment-qr-wrap">
+          <canvas
+            id="start-pay-qr"
+            class="payment-qr"
+            width="424"
+            height="424"
+            role="img"
+            aria-label="Solana Pay QR code"
+          ></canvas>
+          <p>Scan with a Solana Pay-compatible wallet</p>
+        </div>
+        <div class="payment-details">
+          <p class="start-sub payment-amount-label">Amount</p>
+          <div id="start-pay-amount-control" class="payment-amount-control">
+            <button
+              type="button"
+              id="start-pay-less"
+              class="payment-amount-button"
+              aria-label="Decrease payment by 30 USDC"
+              disabled
+            >
+              <.icon name="hero-minus" class="size-4" />
+            </button>
+            <p id="start-pay-amount" class="payment-amount" aria-live="polite">30 USDC</p>
+            <button
+              type="button"
+              id="start-pay-more"
+              class="payment-amount-button"
+              aria-label="Increase payment by 30 USDC"
+            >
+              <.icon name="hero-plus" class="size-4" />
+            </button>
+          </div>
+          <p id="start-pay-network" class="payment-network">Solana · {@network}</p>
+          <p class="start-sub">USDC deposit address</p>
+          <.copy_block id="start-deposit" code={@deposit} />
+          <div class="payment-actions">
+            <div class="payment-pay-ways">
+              <button
+                type="button"
+                id="start-pay-card"
+                class="payment-btn payment-btn--primary"
+                hidden={!@stripe}
+              >
+                Pay by card
+              </button>
+              <a
+                id="start-wallet-open"
+                class="payment-btn payment-btn--secondary"
+                href={@solana_pay}
+              >
+                Open Solana wallet
+              </a>
+            </div>
+            <button type="button" id="start-pay-check" class="payment-btn payment-btn--ghost">
+              Check USDC payment
+            </button>
+          </div>
+          <p
+            id="start-pay-status"
+            class="payment-status"
+            data-state={if(@plan in ["paid", "comp"], do: "paid", else: "waiting")}
+            aria-live="polite"
+          >
+            {plan_status(@plan, @expires)}
+          </p>
+        </div>
+      </div>
+
+      <div class="payment-page-link">
+        <div>
+          <p class="start-sub">Private payment link</p>
+          <p>Keep it with your dashboard URL. You will use it for every renewal.</p>
+        </div>
+        <.copy_block id="start-pay" code={@pay_url} />
+      </div>
+    </div>
+
+    <div class="payment-page-notes">
+      <p>
+        <strong>Card payments</strong> open Stripe Checkout and are applied after confirmation.
+      </p>
+      <p>
+        <strong>USDC payments</strong> use the same permanent deposit address. Return here and
+        check the payment after the transfer is confirmed.
+      </p>
+    </div>
+  </section>
+</Layouts.shell>

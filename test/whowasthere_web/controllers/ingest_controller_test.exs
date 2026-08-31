@@ -56,31 +56,106 @@ defmodule WhoWasThereWeb.IngestControllerTest do
              created["deposit"]
   end
 
-  test "GET /pay opens the browser payment flow", %{conn: conn} do
+  test "GET /pay renders a dedicated browser payment page", %{conn: conn} do
+    previous_stripe_key = Application.get_env(:whowasthere, :stripe_secret_key)
+    previous_webhook_secret = Application.get_env(:whowasthere, :stripe_webhook_secret)
+    Application.put_env(:whowasthere, :stripe_secret_key, "sk_test_browser_page")
+    Application.put_env(:whowasthere, :stripe_webhook_secret, "whsec_test_browser_page")
+
+    on_exit(fn ->
+      if previous_stripe_key,
+        do: Application.put_env(:whowasthere, :stripe_secret_key, previous_stripe_key),
+        else: Application.delete_env(:whowasthere, :stripe_secret_key)
+
+      if previous_webhook_secret,
+        do: Application.put_env(:whowasthere, :stripe_webhook_secret, previous_webhook_secret),
+        else: Application.delete_env(:whowasthere, :stripe_webhook_secret)
+    end)
+
     created = conn |> get(~p"/new?format=json") |> json_response(200)
 
-    conn =
+    html =
+      conn
+      |> recycle()
+      |> put_req_header("accept", "text/html")
+      |> get("/pay?pay=#{created["pay"]}")
+      |> html_response(200)
+
+    document = LazyHTML.from_fragment(html)
+    payment = LazyHTML.query(document, "#payment-page")
+
+    assert LazyHTML.attribute(payment, "data-pay") == [created["pay"]]
+    assert LazyHTML.attribute(payment, "data-deposit") == [created["deposit"]]
+    assert LazyHTML.attribute(payment, "data-checkout-url") == ["/pay/checkout"]
+    assert LazyHTML.query(document, "#start") |> Enum.empty?()
+    assert LazyHTML.query(document, "#start-pay-qr") |> Enum.any?()
+    assert LazyHTML.query(document, "#start-pay-card:not([hidden])") |> Enum.any?()
+    assert LazyHTML.query(document, "#start-pay-check") |> Enum.any?()
+    assert LazyHTML.query(document, "#start-pay") |> LazyHTML.text() =~ created["pay"]
+    assert LazyHTML.text(payment) =~ "Pay or renew"
+    assert LazyHTML.text(payment) =~ "500,000 pageviews / month"
+  end
+
+  test "GET /pay renders an HTML error for an invalid browser link", %{conn: conn} do
+    html =
+      conn
+      |> put_req_header("accept", "text/html")
+      |> get("/pay?pay=p_not_a_real_profile")
+      |> html_response(404)
+
+    document = LazyHTML.from_fragment(html)
+    assert LazyHTML.query(document, "#payment-error-page") |> Enum.any?()
+    assert LazyHTML.text(document) =~ "Payment profile not found."
+  end
+
+  test "Stripe Checkout returns to the dedicated payment page", %{conn: conn} do
+    previous_stripe_key = Application.get_env(:whowasthere, :stripe_secret_key)
+    previous_webhook_secret = Application.get_env(:whowasthere, :stripe_webhook_secret)
+    previous_checkout = Application.get_env(:whowasthere, :stripe_create_checkout)
+    parent = self()
+
+    Application.put_env(:whowasthere, :stripe_secret_key, "sk_test_checkout_page")
+    Application.put_env(:whowasthere, :stripe_webhook_secret, "whsec_test_checkout_page")
+
+    Application.put_env(:whowasthere, :stripe_create_checkout, fn attrs ->
+      send(parent, {:checkout_urls, attrs.success_url, attrs.cancel_url})
+      {:ok, %{url: "https://checkout.stripe.test/session"}}
+    end)
+
+    on_exit(fn ->
+      restore_env(:stripe_secret_key, previous_stripe_key)
+      restore_env(:stripe_webhook_secret, previous_webhook_secret)
+      restore_env(:stripe_create_checkout, previous_checkout)
+    end)
+
+    created = conn |> get(~p"/new?format=json") |> json_response(200)
+
+    page_conn =
       conn
       |> recycle()
       |> put_req_header("accept", "text/html")
       |> get("/pay?pay=#{created["pay"]}")
 
-    assert redirected_to(conn, 302) == "/?pay=#{created["pay"]}#start-pay-step"
+    document = page_conn |> html_response(200) |> LazyHTML.from_fragment()
 
-    html =
-      conn
+    csrf =
+      document
+      |> LazyHTML.query("meta[name='csrf-token']")
+      |> LazyHTML.attribute("content")
+      |> hd()
+
+    checkout =
+      page_conn
       |> recycle()
-      |> get(redirected_to(conn, 302))
-      |> html_response(200)
+      |> put_req_header("accept", "application/json")
+      |> put_req_header("x-csrf-token", csrf)
+      |> post("/pay/checkout", %{"pay" => created["pay"], "amount" => "60"})
 
-    document = LazyHTML.from_fragment(html)
-    start = LazyHTML.query(document, "#start")
+    assert json_response(checkout, 200)["url"] == "https://checkout.stripe.test/session"
 
-    assert LazyHTML.attribute(start, "data-new-url") == [
-             "/new?pay=#{created["pay"]}&format=json"
-           ]
-
-    assert LazyHTML.attribute(start, "data-payment-url") == ["/pay"]
+    payment_url = "http://www.example.com/pay?pay=#{created["pay"]}"
+    success_url = "#{payment_url}&checkout=1"
+    assert_receive {:checkout_urls, ^success_url, ^payment_url}
   end
 
   test "a forged pay capability does not materialize", %{conn: conn} do
@@ -284,4 +359,7 @@ defmodule WhoWasThereWeb.IngestControllerTest do
     conn = get(conn, ~p"/new?id=#{id}&format=json")
     {recycle(conn), json_response(conn, 200)}
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:whowasthere, key)
+  defp restore_env(key, value), do: Application.put_env(:whowasthere, key, value)
 end

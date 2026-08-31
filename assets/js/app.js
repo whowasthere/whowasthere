@@ -178,18 +178,10 @@ const setAnchorHref = (el, href) => {
   }
 }
 
-const showIssued = (data, checked = false) => {
+const showPayment = (data, checked = false) => {
   lastIssued = data
-  fillCode("start-snippet", data.snippet)
-  fillCode("start-dash", data.dash)
   fillCode("start-pay", data.pay_url)
   fillCode("start-deposit", data.deposit)
-
-  const link = document.getElementById("start-dash-open")
-  if (link && data.dash) {
-    setAnchorHref(link, data.dash)
-    link.hidden = false
-  }
 
   const payment = document.getElementById("start-payment")
   const paymentEmpty = document.getElementById("start-payment-empty")
@@ -199,10 +191,12 @@ const showIssued = (data, checked = false) => {
   const less = document.getElementById("start-pay-less")
   const network = document.getElementById("start-pay-network")
   const qr = document.getElementById("start-pay-qr")
+
   if (payLink && data.pay_url) {
     setAnchorHref(payLink, data.pay_url)
     payLink.hidden = false
   }
+
   if (payment && data.pay_url && data.deposit) {
     const selectedAmount = selectedPaymentAmount(data)
     const paymentUri = solanaPayForAmount(data.solana_pay, selectedAmount)
@@ -217,16 +211,43 @@ const showIssued = (data, checked = false) => {
     if (less) less.disabled = selectedAmount === PAYMENT_STEP_USDC
     if (network) network.textContent = `Solana · ${data.network || "mainnet-beta"}`
     if (qr && paymentUri) drawPaymentQr(qr, paymentUri)
+
     const cardBtn = document.getElementById("start-pay-card")
     if (cardBtn) {
       const stripeOn =
         data.stripe === true ||
         data.stripe === "true" ||
-        document.getElementById("start")?.dataset.stripe === "true"
+        document.querySelector("#start, #payment-page")?.dataset.stripe === "true"
       cardBtn.hidden = !stripeOn
     }
+
     paymentStatus(data, checked)
   }
+
+  const plan = document.getElementById("payment-page-plan")
+  if (plan) {
+    const until = data.expires ? String(data.expires).slice(0, 10) : ""
+    plan.textContent = planStatus(data.plan, until)
+  }
+
+  const allowance = document.getElementById("payment-page-allowance")
+  const monthCap = Number(data.month_cap)
+  if (allowance && Number.isSafeInteger(monthCap)) {
+    allowance.textContent = `${monthCap.toLocaleString("en-US")} pageviews / month`
+  }
+}
+
+const showIssued = (data, checked = false) => {
+  fillCode("start-snippet", data.snippet)
+  fillCode("start-dash", data.dash)
+
+  const link = document.getElementById("start-dash-open")
+  if (link && data.dash) {
+    setAnchorHref(link, data.dash)
+    link.hidden = false
+  }
+
+  showPayment(data, checked)
 
   const meta = document.getElementById("start-meta")
   if (meta) {
@@ -241,64 +262,11 @@ const showIssued = (data, checked = false) => {
   }
 }
 
-const bootStart = () => {
-  const root = document.getElementById("start")
-  if (!root) return
-
-  const paymentCap = new URLSearchParams(window.location.search).get("pay")
-
-  if (!paymentCap) {
-    try {
-      const saved = sessionStorage.getItem(LAST_SITE)
-      if (saved) showIssued(JSON.parse(saved))
-    } catch {
-      /* ignore */
-    }
-  } else {
-    const paymentEmpty = document.getElementById("start-payment-empty")
-    if (paymentEmpty) paymentEmpty.textContent = "Loading payment options…"
-
-    const loadPaymentProfile = async () => {
-      try {
-        const url = new URL(root.dataset.paymentUrl || "/pay", window.location.origin)
-        url.searchParams.set("pay", paymentCap)
-        url.searchParams.set("format", "json")
-        const res = await fetch(url, {headers: {Accept: "application/json"}})
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || "Couldn’t load the payment profile.")
-
-        showIssued(data)
-        try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
-      } catch (error) {
-        if (paymentEmpty) {
-          paymentEmpty.textContent = error.message || "Couldn’t load the payment profile."
-        }
-      }
-    }
-
-    loadPaymentProfile()
+const bindPaymentControls = root => {
+  const saveStartState = data => {
+    if (root.id !== "start") return
+    try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
   }
-
-  const createBtn = document.getElementById("start-create")
-  createBtn?.addEventListener("click", async () => {
-    const url = root.dataset.newUrl
-    if (!url) return
-    createBtn.disabled = true
-    createBtn.textContent = "Creating…"
-    try {
-      const res = await fetch(url, {headers: {Accept: "application/json"}})
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "failed")
-      showIssued(data)
-      try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
-      createBtn.textContent = "Create another"
-    } catch {
-      createBtn.textContent = "Try again"
-      setTimeout(() => (createBtn.textContent = "Create a site"), 1800)
-    } finally {
-      createBtn.disabled = false
-    }
-  })
 
   const changePaymentAmount = delta => {
     if (!lastIssued?.solana_pay) return
@@ -306,8 +274,9 @@ const bootStart = () => {
     const next = Math.max(PAYMENT_STEP_USDC, current + delta)
     if (next === current) return
 
-    showIssued({...lastIssued, selected_amount_usdc: next})
-    try { sessionStorage.setItem(LAST_SITE, JSON.stringify(lastIssued)) } catch { /* ignore */ }
+    const updated = {...lastIssued, selected_amount_usdc: next}
+    showPayment(updated)
+    saveStartState(updated)
   }
 
   document.getElementById("start-pay-less")?.addEventListener("click", () => {
@@ -386,7 +355,7 @@ const bootStart = () => {
         selected_amount_usdc: lastIssued.selected_amount_usdc
       }
       showIssued(updated, true)
-      try { sessionStorage.setItem(LAST_SITE, JSON.stringify(updated)) } catch { /* ignore */ }
+      saveStartState(updated)
       checkBtn.textContent =
         data.plan === "paid" || data.plan === "comp" ? "Payment confirmed" : checkLabel
     } catch (error) {
@@ -401,14 +370,71 @@ const bootStart = () => {
   })
 }
 
+const bootStart = () => {
+  const root = document.getElementById("start")
+  if (!root) return
+
+  try {
+    const saved = sessionStorage.getItem(LAST_SITE)
+    if (saved) showIssued(JSON.parse(saved))
+  } catch {
+    /* ignore */
+  }
+
+  const createBtn = document.getElementById("start-create")
+  createBtn?.addEventListener("click", async () => {
+    const url = root.dataset.newUrl
+    if (!url) return
+    createBtn.disabled = true
+    createBtn.textContent = "Creating…"
+    try {
+      const res = await fetch(url, {headers: {Accept: "application/json"}})
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "failed")
+      showIssued(data)
+      try { sessionStorage.setItem(LAST_SITE, JSON.stringify(data)) } catch { /* ignore */ }
+      createBtn.textContent = "Create another"
+    } catch {
+      createBtn.textContent = "Try again"
+      setTimeout(() => (createBtn.textContent = "Create a site"), 1800)
+    } finally {
+      createBtn.disabled = false
+    }
+  })
+
+  bindPaymentControls(root)
+}
+
+const bootPaymentPage = () => {
+  const root = document.getElementById("payment-page")
+  if (!root) return
+
+  showPayment({
+    pay: root.dataset.pay,
+    pay_url: root.dataset.payUrl,
+    deposit: root.dataset.deposit,
+    solana_pay: root.dataset.solanaPay,
+    amount_usdc: Number(root.dataset.amountUsdc),
+    network: root.dataset.network,
+    plan: root.dataset.plan,
+    expires: root.dataset.expires,
+    month_cap: Number(root.dataset.monthCap),
+    stripe: root.dataset.stripe
+  })
+
+  bindPaymentControls(root)
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     addCopyButtons()
     bootStart()
+    bootPaymentPage()
   })
 } else {
   addCopyButtons()
   bootStart()
+  bootPaymentPage()
 }
 
 // expose liveSocket on window for web console debug logs and latency simulation:

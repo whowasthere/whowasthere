@@ -67,41 +67,72 @@ defmodule WhoWasThereWeb.SiteController do
   end
 
   def pay(conn, params) do
-    if browser_request?(conn, params) do
-      destination = "/?pay=#{URI.encode_www_form(params["pay"] || "")}#start-pay-step"
-      redirect(conn, to: destination)
-    else
-      payment_status(conn, params)
+    case payment_payload(conn, params) do
+      {:ok, payload} ->
+        if browser_request?(conn, params) do
+          render_payment(conn, payload)
+        else
+          respond(conn, params, payload)
+        end
+
+      {:error, reason} ->
+        if browser_request?(conn, params) do
+          render_payment_error(conn, reason)
+        else
+          conn
+          |> put_status(status_for(reason))
+          |> respond(params, %{error: error_text(reason)})
+        end
     end
   end
 
-  defp payment_status(conn, params) do
+  defp payment_payload(conn, params) do
     base = base_url(conn)
 
     case Billing.payment_profile(params["pay"]) do
       {:ok, payment, profile} ->
         info = Billing.info()
 
-        respond(conn, params, %{
-          pay: params["pay"],
-          pay_url: "#{base}/pay?pay=#{params["pay"]}",
-          deposit: profile.deposit_address,
-          amount_usdc: info.amount_usdc,
-          mint: info.mint,
-          network: info.network,
-          solana_pay: solana_pay_uri(profile.deposit_address, info),
-          stripe: info.stripe,
-          month_cap: payment.month_cap,
-          plan: payment.kind,
-          expires: DateTime.to_iso8601(payment.expires_at),
-          email: payment.email,
-          new: "#{base}/new?pay=#{params["pay"]}",
-          notify: "#{base}/notify?pay=#{params["pay"]}&email=you@example.com"
-        })
+        {:ok,
+         %{
+           pay: params["pay"],
+           pay_url: "#{base}/pay?pay=#{params["pay"]}",
+           deposit: profile.deposit_address,
+           amount_usdc: info.amount_usdc,
+           mint: info.mint,
+           network: info.network,
+           solana_pay: solana_pay_uri(profile.deposit_address, info),
+           stripe: info.stripe,
+           month_cap: payment.month_cap,
+           plan: payment.kind,
+           expires: DateTime.to_iso8601(payment.expires_at),
+           email: payment.email,
+           new: "#{base}/new?pay=#{params["pay"]}",
+           notify: "#{base}/notify?pay=#{params["pay"]}&email=you@example.com"
+         }}
 
       {:error, reason} ->
-        conn |> put_status(status_for(reason)) |> respond(params, %{error: error_text(reason)})
+        {:error, reason}
     end
+  end
+
+  defp render_payment(conn, payload) do
+    conn
+    |> put_view(html: WhoWasThereWeb.PageHTML)
+    |> put_root_layout(html: {WhoWasThereWeb.Layouts, :root})
+    |> render(:pay, Map.merge(payload, %{page_title: "Pay or renew", flash: %{}}))
+  end
+
+  defp render_payment_error(conn, reason) do
+    conn
+    |> put_status(status_for(reason))
+    |> put_view(html: WhoWasThereWeb.PageHTML)
+    |> put_root_layout(html: {WhoWasThereWeb.Layouts, :root})
+    |> render(:pay_error,
+      page_title: "Payment unavailable",
+      flash: %{},
+      message: error_text(reason)
+    )
   end
 
   def renew(conn, params) do
@@ -112,10 +143,11 @@ defmodule WhoWasThereWeb.SiteController do
     pay = params["pay"]
     amount = parse_amount(params["amount"])
     base = base_url(conn)
+    payment_url = "#{base}/pay?pay=#{URI.encode_www_form(pay || "")}"
 
     urls = %{
-      success_url: "#{base}/pay?pay=#{URI.encode_www_form(pay || "")}&checkout=1",
-      cancel_url: "#{base}/#start-pay-step"
+      success_url: "#{payment_url}&checkout=1",
+      cancel_url: payment_url
     }
 
     case Billing.start_checkout(pay, amount, urls) do

@@ -1,14 +1,13 @@
 defmodule WhoWasThereWeb.PageController do
   use WhoWasThereWeb, :controller
 
-  def home(conn, params) do
+  def home(conn, _params) do
     base = base_url(conn)
     info = WhoWasThere.Billing.info()
 
     render(conn, :home,
       page_title: "who was there",
       base_url: base,
-      payment_cap: params["pay"],
       stripe_enabled: info.stripe,
       open_graph: %{
         title: "Who Was There — privacy-first web analytics",
