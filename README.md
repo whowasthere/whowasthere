@@ -344,3 +344,5 @@ GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
 4. The dashboard reads today from ETS and older days from SQLite.
 
 Stack: Phoenix 1.8, LiveView, Bandit, SQLite.
+
+Article (RU): https://www.bythe.net/p/kto-zdes-byl-veb-analitika-na-elixir-bez-akkauntov-i-zhurnala-posescheniy
