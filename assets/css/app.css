@@ -206,11 +206,6 @@ body::after {
   display: none;
 }
 
-.panel-lift:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in oklab, var(--color-primary) 30%, var(--line));
-  box-shadow: 0 18px 40px -28px color-mix(in oklab, var(--color-primary) 55%, transparent);
-}
 
 .rule {
   height: 1px;
@@ -360,23 +355,251 @@ a.chip:hover {
   background: var(--color-primary);
 }
 
-/* Masonry-ish card wall: cards keep their natural height, no ragged gaps. */
-.wall {
-  column-count: 1;
-  column-gap: 1rem;
+/* ---------------------------------------------------------------- *
+ *  Dashboard
+ * ---------------------------------------------------------------- */
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.dash .panel {
+  border-color: color-mix(in oklab, var(--color-base-content) 16%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, white 96%, var(--color-base-100));
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--color-base-content) 6%, transparent);
+}
+.dash-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 0.75rem;
+}
+@media (min-width: 640px) {
+  .dash-head {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+.dash-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+.dash-live strong {
+  font-weight: 600;
+  color: var(--color-base-content);
+}
+.dash-host {
+  margin-top: 0.6rem;
+  overflow: hidden;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-host--empty {
+  color: var(--ink-faint);
+}
+.dash-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-top: 0.7rem;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+.dash-meta > span:first-child {
+  font-weight: 600;
+  color: var(--color-base-content);
+}
+.dash-id {
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+.dash-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+@media (min-width: 1024px) {
+  .dash-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-.wall > * {
-  break-inside: avoid;
-  margin-bottom: 1rem;
+/* Plan strip */
+.plan {
+  display: grid;
+  gap: 0.75rem 2rem;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--color-base-200);
+  padding: 0.85rem 1.1rem;
+}
+@media (min-width: 640px) {
+  .plan { grid-template-columns: auto minmax(0, 22rem); justify-content: space-between; }
+}
+.plan--expired {
+  border-color: color-mix(in oklab, var(--color-error) 45%, var(--line));
+  background: color-mix(in oklab, var(--color-error) 7%, var(--color-base-100));
+}
+.plan-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.875rem;
+}
+.plan-kind {
+  font-weight: 650;
+}
+.plan-kind--paid { color: var(--color-primary); }
+.plan--expired .plan-kind { color: var(--color-error); }
+.plan-aside {
+  color: var(--ink-muted);
+}
+.plan-quota {
+  display: grid;
+  gap: 0.4rem;
+}
+.plan-track {
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+.plan-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 0.4s var(--ease);
+}
+.plan-fill--over { background: var(--color-error); }
+.plan-numbers {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+.plan-numbers .num { color: var(--color-base-content); }
+.plan-warn {
+  font-size: 0.8125rem;
+  color: var(--color-error);
+}
+@media (min-width: 640px) {
+  .plan-warn { grid-column: 1 / -1; }
 }
 
-@media (min-width: 768px) {
-  .wall { column-count: 2; }
+/* Overview: KPI strip over the traffic chart */
+.overview {
+  overflow: hidden;
 }
-
-@media (min-width: 1280px) {
-  .wall { column-count: 3; }
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 1024px) {
+  .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.1rem 1.25rem 1.15rem;
+  border-top: 1px solid var(--line-soft);
+  border-left: 1px solid var(--line-soft);
+}
+.kpi:nth-child(-n + 2) { border-top: 0; }
+.kpi:nth-child(odd) { border-left: 0; }
+.kpi--lead {
+  grid-column: 1 / -1;
+  background: color-mix(in oklab, var(--color-primary) 6%, transparent);
+  box-shadow: inset 0 3px 0 var(--color-primary);
+}
+.kpi--lead + .kpi { border-top: 1px solid var(--line-soft); }
+.kpi--lead ~ .kpi:nth-child(odd) { border-left: 1px solid var(--line-soft); }
+.kpi--lead ~ .kpi:nth-child(even) { border-left: 0; }
+@media (min-width: 1024px) {
+  .kpi,
+  .kpi--lead + .kpi,
+  .kpi--lead ~ .kpi:nth-child(n) {
+    border-top: 0;
+    border-left: 1px solid var(--line-soft);
+  }
+  .kpi--lead {
+    grid-column: auto;
+    border-left: 0;
+  }
+}
+.kpi-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.kpi-value {
+  margin-top: 0.55rem;
+  font-family: var(--sans);
+  font-size: clamp(1.75rem, 3.2vw, 2.25rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--color-base-content);
+}
+.kpi--lead .kpi-value {
+  color: var(--color-primary);
+}
+.kpi-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  min-height: 1.4rem;
+  margin-top: 0.7rem;
+  font-size: 0.75rem;
+}
+.kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem 0.1rem 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.kpi-delta--good {
+  background: color-mix(in oklab, var(--color-success) 14%, transparent);
+  color: color-mix(in oklab, var(--color-success) 80%, var(--color-base-content));
+}
+.kpi-delta--bad {
+  background: color-mix(in oklab, var(--color-error) 11%, transparent);
+  color: color-mix(in oklab, var(--color-error) 85%, var(--color-base-content));
+}
+.kpi-delta--flat {
+  background: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+  color: var(--ink-muted);
+}
+.kpi-note {
+  color: var(--ink-faint);
+}
+.overview-chart {
+  padding: 1.1rem 1.25rem 1rem;
+}
+.overview-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+.overview-legend .num {
+  font-size: 0.75rem;
 }
 
 /* Charts (Apache ECharts canvas) */
@@ -384,54 +607,241 @@ a.chip:hover {
   min-height: 12rem;
 }
 
-/* Ranked rows */
-.row {
+/* Boards: ranked lists with an optional tab bar */
+.board {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  border-radius: 0.6rem;
-  padding: 0.5rem 0.4rem;
-  transition: background-color 0.2s var(--ease);
+  flex-direction: column;
+  min-width: 0;
 }
-
-.row:hover {
-  background: color-mix(in oklab, var(--color-base-content) 4%, transparent);
+.board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  min-height: 3.25rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0 1.25rem;
 }
-
-.row-track {
-  margin-top: 0.4rem;
-  height: 3px;
-  overflow: hidden;
-  border-radius: 9999px;
-  background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+.board-title {
+  padding: 0.85rem 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
-
-.row-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: color-mix(in oklab, var(--color-primary) 70%, transparent);
-  transition: width 0.35s var(--ease);
-}
-
-.row-rank {
-  width: 1.25rem;
-  padding-top: 0.15rem;
-  font-family: var(--mono);
-  font-size: 0.625rem;
-  font-variant-numeric: tabular-nums;
+.board-hint {
+  padding: 0.5rem 0;
+  font-size: 0.75rem;
   color: var(--ink-faint);
 }
-
-.row-key {
-  font-family: var(--mono);
-  font-size: 0.8125rem;
-  color: color-mix(in oklab, var(--color-base-content) 88%, transparent);
+.dtabs {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: -1px;
+  overflow-x: auto;
 }
+.dtab {
+  border-bottom: 2px solid transparent;
+  padding: 0.95rem 0 0.8rem;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+.dtab:hover {
+  color: var(--color-base-content);
+}
+.dtab[aria-selected="true"] {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-base-content);
+}
+.dtab:focus-visible {
+  border-radius: 0.2rem;
+}
+.ranks {
+  padding: 0.6rem 0.75rem 0.75rem;
+}
+.ranks-empty {
+  padding: 2.25rem 0.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--ink-faint);
+}
+.ranks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rank {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 3.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.125rem;
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+}
+.rank-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--color-primary) 11%, transparent);
+  transition: width 0.4s var(--ease), background-color 0.18s var(--ease);
+}
+.rank:hover .rank-bar {
+  background: color-mix(in oklab, var(--color-primary) 19%, transparent);
+}
+.rank > :not(.rank-bar) {
+  position: relative;
+}
+.rank-key {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--color-base-content);
+}
+.flag {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1;
+}
+.rank-value {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: right;
+  color: var(--color-base-content);
+}
+.rank-share {
+  font-size: 0.75rem;
+  text-align: right;
+  color: var(--ink-faint);
+}
+.hops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.hop {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: var(--color-base-100);
+  padding: 0.05rem 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hop--click {
+  border-color: color-mix(in oklab, var(--color-accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--color-accent) 12%, var(--color-base-100));
+  color: color-mix(in oklab, var(--color-accent) 75%, var(--color-base-content));
+}
+.hop-sep {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--ink-faint);
+}
+.ranks-more > summary {
+  display: inline-flex;
+  margin: 0.4rem 0.5rem 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  list-style: none;
+}
+.ranks-more > summary::-webkit-details-marker { display: none; }
+.ranks-more > summary:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.ranks-more[open] > summary { order: 2; }
+.ranks-more[open] .ranks-more-open,
+.ranks-more:not([open]) .ranks-more-close { display: none; }
+.ranks-more[open] {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+}
+
+/* Technology: 100% share bars */
+.tech {
+  display: grid;
+  gap: 1.5rem 2rem;
+  padding: 1.25rem;
+}
+@media (min-width: 640px) {
+  .tech { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.share-label {
+  margin-bottom: 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.share-bar {
+  display: flex;
+  gap: 2px;
+  height: 0.875rem;
+  overflow: hidden;
+  border-radius: 0.25rem;
+}
+.share-bar--empty {
+  background: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+}
+.share-seg {
+  flex-basis: 0;
+  min-width: 3px;
+}
+.share-legend {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.75rem;
+}
+.share-legend li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8125rem;
+}
+.share-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 0.15rem;
+}
+.share-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-pct {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+.share-empty {
+  margin-top: 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+/* One hue, stepped in lightness: rank reads as depth, "Other" stays neutral. */
+.tone-0 { background: var(--color-primary); }
+.tone-1 { background: color-mix(in oklab, var(--color-primary) 70%, var(--color-base-100)); }
+.tone-2 { background: color-mix(in oklab, var(--color-primary) 46%, var(--color-base-100)); }
+.tone-3 { background: color-mix(in oklab, var(--color-primary) 26%, var(--color-base-100)); }
+.tone-rest { background: color-mix(in oklab, var(--color-base-content) 18%, var(--color-base-100)); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .pulse::after { animation: none; }
+  .rank-bar, .plan-fill { transition: none; }
 }
 
 /* ---------------------------------------------------------------- *

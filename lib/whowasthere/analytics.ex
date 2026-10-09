@@ -78,8 +78,33 @@ defmodule WhoWasThere.Analytics do
       avg_ms: if(sessions > 0, do: div(totals.duration_ms, sessions), else: 0),
       hours: hours,
       series: series,
+      previous: previous(id, range, from, to),
       dims: sort_dims(dims)
     }
+  end
+
+  # Totals for the equally long period right before `from`, so the dashboard
+  # can show change. The current period ends with a partial today, so the
+  # matching last day of the previous period counts only the elapsed share.
+  defp previous(_id, :today, _from, _to), do: nil
+
+  defp previous(id, _range, from, to) do
+    days = Date.diff(to, from) + 1
+    last = Date.add(to, -days)
+    full = Store.range_totals(id, Date.add(from, -days), Date.add(last, -1))
+    part = scale(Store.range_totals(id, last, last), day_elapsed(to))
+    totals = Map.merge(full, part, fn _k, a, b -> a + b end)
+    sessions = max(totals.sessions, 0)
+
+    if totals.pageviews > 0 do
+      %{
+        pageviews: totals.pageviews,
+        uniques: totals.uniques,
+        sessions: sessions,
+        bounce_rate: ratio(totals.bounces, sessions),
+        avg_ms: if(sessions > 0, do: div(totals.duration_ms, sessions), else: 0)
+      }
+    end
   end
 
   defp merge_totals(hist, snap) do
@@ -120,6 +145,18 @@ defmodule WhoWasThere.Analytics do
   defp dates(:d7, today), do: {Date.add(today, -6), today}
   defp dates(:d30, today), do: {Date.add(today, -29), today}
   defp dates(:d90, today), do: {Date.add(today, -89), today}
+
+  defp day_elapsed(day) do
+    if day == Date.utc_today() do
+      {s, _} = Time.to_seconds_after_midnight(Time.utc_now())
+      s / 86_400
+    else
+      1.0
+    end
+  end
+
+  defp scale(totals, 1.0), do: totals
+  defp scale(totals, f), do: Map.new(totals, fn {k, v} -> {k, round(v * f)} end)
 
   defp ratio(_n, 0), do: 0.0
   defp ratio(n, d), do: n / d

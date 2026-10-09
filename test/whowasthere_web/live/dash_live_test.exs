@@ -32,12 +32,16 @@ defmodule WhoWasThereWeb.DashLiveTest do
     assert render(view) =~ "pageviews"
     assert render(view) =~ "Unique visitors"
     assert has_element?(view, "#traffic-chart")
-    assert has_element?(view, "#chart-devices")
-    assert has_element?(view, "#chart-browsers")
-    assert has_element?(view, "#chart-os")
-    assert has_element?(view, "#chart-sessions")
-    assert has_element?(view, "#chart-countries")
-    assert has_element?(view, "#chart-viewport")
+    assert has_element?(view, "#kpi-pageviews")
+    assert has_element?(view, "#share-device")
+    assert has_element?(view, "#share-browser")
+    assert has_element?(view, "#share-os")
+    assert has_element?(view, "#share-width")
+    assert has_element?(view, "#rows-content")
+    assert has_element?(view, "#rows-places")
+
+    view |> element("#tab-places-lang") |> render_click()
+    assert has_element?(view, "#tab-places-lang[aria-selected=true]")
   end
 
   test "shows the locked host, not the site id", %{conn: conn} do
