@@ -1,4 +1,4 @@
-<Layouts.shell flash={@flash}>
+<Layouts.shell flash={@flash} wide>
   <section
     id="start"
     class="start"
@@ -7,225 +7,301 @@
     data-stripe={to_string(@stripe_enabled)}
   >
     <div class="start-hero">
-      <h1 class="display-title start-title">Who Was There</h1>
-      <p class="start-lead">
-        Simple website analytics without accounts or visitor profiles. Two private links give you
-        access to stats and billing. A tiny script records daily aggregates — no cookies or raw
-        hit logs.
-      </p>
-      <p class="start-hosted">
-        <a href="#pricing">$30 a year</a>
-        after a 7-day free trial. <a href="#self-host">Self-host</a>
-        for full control.
-      </p>
+      <div class="start-intro">
+        <h1 class="display-title start-title">Who Was There</h1>
+        <p class="start-lead">
+          Simple website analytics without accounts or visitor profiles. Two private links give you
+          access to stats and billing. A tiny script records daily aggregates — no cookies or raw
+          hit logs.
+        </p>
+        <div class="start-ctas">
+          <a href="#steps" class="btn-solid">Get started</a>
+          <a href="#readme" class="btn-plain">Read the docs</a>
+        </div>
+        <p class="start-hosted">
+          <a href="#pricing">$30 a year</a>
+          after a 7-day free trial. <a href="#self-host">Self-host</a>
+          for full control.
+        </p>
+      </div>
+
+      <figure class="preview" aria-label="Example dashboard">
+        <div class="preview-panel">
+          <div class="preview-head">
+            <span class="preview-host">yoursite.com</span>
+            <span class="preview-live"><span class="pulse" /> 12 on the site now</span>
+          </div>
+          <dl class="preview-kpis">
+            <div class="preview-kpi preview-kpi--lead">
+              <dt>Pageviews</dt>
+              <dd class="num">48.2k</dd>
+              <dd class="preview-delta">+14%</dd>
+            </div>
+            <div class="preview-kpi">
+              <dt>Visitors</dt>
+              <dd class="num">19.6k</dd>
+              <dd class="preview-delta">+9%</dd>
+            </div>
+            <div class="preview-kpi">
+              <dt>Bounce</dt>
+              <dd class="num">41%</dd>
+              <dd class="preview-delta">−3%</dd>
+            </div>
+          </dl>
+          <div class="preview-bars" aria-hidden="true">
+            <span
+              :for={
+                h <- [
+                  38,
+                  44,
+                  41,
+                  52,
+                  47,
+                  30,
+                  27,
+                  49,
+                  58,
+                  55,
+                  63,
+                  60,
+                  36,
+                  33,
+                  61,
+                  70,
+                  66,
+                  74,
+                  92,
+                  71,
+                  45,
+                  42
+                ]
+              }
+              style={"height: #{h}%"}
+            />
+          </div>
+          <ol class="preview-ranks">
+            <li><span style="width: 100%" /><b>/</b><i class="num">21.4k</i></li>
+            <li><span style="width: 46%" /><b>/pricing</b><i class="num">9.8k</i></li>
+            <li><span style="width: 31%" /><b>/docs</b><i class="num">6.6k</i></li>
+          </ol>
+        </div>
+        <figcaption>An example of what your dashboard shows.</figcaption>
+      </figure>
     </div>
 
     <script src="https://api.hads.dev/v1/hads.js?site=site_F7v4CJh18Dm4XZnSG64BlX4haf2xAanw" async>
     </script>
 
-    <ol class="start-steps">
-      <li class="panel start-step">
-        <span class="start-n num">01</span>
-        <div>
-          <h2>Create a site</h2>
-          <p>
-            No signup. You get two private links instead of a password. Treat them like keys: if
-            you lose them, you lose access.
-          </p>
-          <button type="button" id="start-create" class="start-go">Create a site</button>
-          <p id="start-meta" class="start-meta" hidden>
-            site <span data-site class="num"></span> · <span data-plan></span>
-          </p>
-        </div>
-      </li>
+    <div id="steps" class="start-body">
+      <ol class="start-steps panel">
+        <li class="start-step">
+          <span class="start-n num">1</span>
+          <div>
+            <h2>Create a site</h2>
+            <p>
+              No signup. You get two private links instead of a password. Treat them like keys: if
+              you lose them, you lose access.
+            </p>
+            <button type="button" id="start-create" class="start-go">Create a site</button>
+            <p id="start-meta" class="start-meta" hidden>
+              Site <span data-site class="num"></span>, <span data-plan></span>
+            </p>
+          </div>
+        </li>
 
-      <li class="panel start-step">
-        <span class="start-n num">02</span>
-        <div>
-          <h2>Paste the tracker</h2>
-          <p>
-            Paste this one tag into your site. It sends analytics to this Who Was There instance.
-          </p>
-          <.copy_block
-            id="start-snippet"
-            code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
-          />
-        </div>
-      </li>
+        <li class="start-step">
+          <span class="start-n num">2</span>
+          <div>
+            <h2>Paste the tracker</h2>
+            <p>
+              Paste this one tag into your site. It sends analytics to this Who Was There instance.
+            </p>
+            <.copy_block
+              id="start-snippet"
+              code={~s(<script src="#{@base_url}/w.js" data-w="SITE_KEY" defer></script>)}
+            />
+          </div>
+        </li>
 
-      <li class="panel start-step">
-        <span class="start-n num">03</span>
-        <div>
-          <h2>Save these two links</h2>
-          <p>
-            Together, these links replace an account. The dashboard shows your stats; the payment
-            link handles payments and renewals by card or with USDC.
-          </p>
-          <p class="start-sub">Dashboard</p>
-          <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
-          <a
-            id="start-dash-open"
-            class="start-open"
-            href="#"
-            target="_blank"
-            rel="noopener noreferrer"
-            hidden
-          >
-            Open dashboard
-          </a>
-          <p class="start-sub">Payments and renewals</p>
-          <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
-          <a
-            id="start-pay-open"
-            class="start-open"
-            href="#"
-            target="_blank"
-            rel="noopener noreferrer"
-            hidden
-          >
-            Open payment page
-          </a>
-        </div>
-      </li>
+        <li class="start-step">
+          <span class="start-n num">3</span>
+          <div>
+            <h2>Save these two links</h2>
+            <p>
+              Together, these links replace an account. The dashboard shows your stats; the payment
+              link handles payments and renewals by card or with USDC.
+            </p>
+            <p class="start-sub">Dashboard</p>
+            <.copy_block id="start-dash" code={"#{@base_url}/d/TOKEN"} />
+            <a
+              id="start-dash-open"
+              class="start-open"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+            >
+              Open dashboard
+            </a>
+            <p class="start-sub">Payments and renewals</p>
+            <.copy_block id="start-pay" code={"#{@base_url}/pay?pay=p_SECRET"} />
+            <a
+              id="start-pay-open"
+              class="start-open"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+            >
+              Open payment page
+            </a>
+          </div>
+        </li>
 
-      <li id="start-pay-step" class="panel start-step">
-        <span class="start-n num">04</span>
-        <div>
-          <h2>Pay or renew</h2>
-          <p>
-            Use the same page for your first payment and every renewal. Choose an amount, then pay
-            by card or send USDC on Solana. After sending USDC, click <strong>Check USDC payment</strong>.
-          </p>
-          <p id="start-payment-empty" class="payment-empty">
-            Create a site to see payment options and deposit details.
-          </p>
-          <div id="start-payment" class="payment-card" hidden>
-            <div class="payment-qr-wrap">
-              <canvas
-                id="start-pay-qr"
-                class="payment-qr"
-                width="424"
-                height="424"
-                role="img"
-                aria-label="Solana Pay QR code"
-              ></canvas>
-              <p>Scan with a Solana Pay-compatible wallet</p>
-            </div>
-            <div class="payment-details">
-              <p class="start-sub payment-amount-label">Amount</p>
-              <div id="start-pay-amount-control" class="payment-amount-control">
-                <button
-                  type="button"
-                  id="start-pay-less"
-                  class="payment-amount-button"
-                  aria-label="Decrease payment by 30 USDC"
-                  disabled
-                >
-                  <.icon name="hero-minus" class="size-4" />
-                </button>
-                <p id="start-pay-amount" class="payment-amount" aria-live="polite">30 USDC</p>
-                <button
-                  type="button"
-                  id="start-pay-more"
-                  class="payment-amount-button"
-                  aria-label="Increase payment by 30 USDC"
-                >
-                  <.icon name="hero-plus" class="size-4" />
-                </button>
+        <li id="start-pay-step" class="start-step">
+          <span class="start-n num">4</span>
+          <div>
+            <h2>Pay or renew</h2>
+            <p>
+              Use the same page for your first payment and every renewal. Choose an amount, then pay
+              by card or send USDC on Solana. After sending USDC, click <strong>Check USDC payment</strong>.
+            </p>
+            <p id="start-payment-empty" class="payment-empty">
+              Create a site to see payment options and deposit details.
+            </p>
+            <div id="start-payment" class="payment-card" hidden>
+              <div class="payment-qr-wrap">
+                <canvas
+                  id="start-pay-qr"
+                  class="payment-qr"
+                  width="424"
+                  height="424"
+                  role="img"
+                  aria-label="Solana Pay QR code"
+                ></canvas>
+                <p>Scan with a Solana Pay-compatible wallet</p>
               </div>
-              <p id="start-pay-network" class="payment-network">Solana · mainnet-beta</p>
-              <p class="start-sub">USDC deposit address</p>
-              <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
-              <div class="payment-actions">
-                <div class="payment-pay-ways">
+              <div class="payment-details">
+                <p class="start-sub payment-amount-label">Amount</p>
+                <div id="start-pay-amount-control" class="payment-amount-control">
                   <button
                     type="button"
-                    id="start-pay-card"
-                    class="payment-btn payment-btn--primary"
-                    hidden
+                    id="start-pay-less"
+                    class="payment-amount-button"
+                    aria-label="Decrease payment by 30 USDC"
+                    disabled
                   >
-                    Pay by card
+                    <.icon name="hero-minus" class="size-4" />
                   </button>
-                  <a
-                    id="start-wallet-open"
-                    class="payment-btn payment-btn--secondary"
-                    href="#"
-                    hidden
+                  <p id="start-pay-amount" class="payment-amount" aria-live="polite">30 USDC</p>
+                  <button
+                    type="button"
+                    id="start-pay-more"
+                    class="payment-amount-button"
+                    aria-label="Increase payment by 30 USDC"
                   >
-                    Open Solana wallet
-                  </a>
+                    <.icon name="hero-plus" class="size-4" />
+                  </button>
                 </div>
-                <button type="button" id="start-pay-check" class="payment-btn payment-btn--ghost">
-                  Check USDC payment
-                </button>
+                <p id="start-pay-network" class="payment-network">Solana · mainnet-beta</p>
+                <p class="start-sub">USDC deposit address</p>
+                <.copy_block id="start-deposit" code="SOLANA_ADDRESS" />
+                <div class="payment-actions">
+                  <div class="payment-pay-ways">
+                    <button
+                      type="button"
+                      id="start-pay-card"
+                      class="payment-btn payment-btn--primary"
+                      hidden
+                    >
+                      Pay by card
+                    </button>
+                    <a
+                      id="start-wallet-open"
+                      class="payment-btn payment-btn--secondary"
+                      href="#"
+                      hidden
+                    >
+                      Open Solana wallet
+                    </a>
+                  </div>
+                  <button
+                    type="button"
+                    id="start-pay-check"
+                    class="payment-btn payment-btn--ghost"
+                  >
+                    Check USDC payment
+                  </button>
+                </div>
+                <p id="start-pay-status" class="payment-status" aria-live="polite"></p>
               </div>
-              <p id="start-pay-status" class="payment-status" aria-live="polite"></p>
             </div>
           </div>
-        </div>
-      </li>
-    </ol>
-  </section>
-  <aside
-    id="hads-create"
-    class="panel hads-unit"
-    data-hads-slot="create"
-    data-hads-topic="web analytics privacy"
-    data-hads-allow-self
-  >
-    <a data-hads-attribution class="hads-unit-attribution">Ads by HADS</a>
-    <strong data-hads-title>
-      <span class="hads-unit-skeleton hads-unit-skeleton--title" aria-hidden="true"></span>
-    </strong>
-    <p data-hads-text>
-      <span class="hads-unit-skeleton hads-unit-skeleton--text" aria-hidden="true"></span>
-      <span
-        class="hads-unit-skeleton hads-unit-skeleton--text hads-unit-skeleton--text-short"
-        aria-hidden="true"
-      ></span>
-    </p>
-    <a data-hads-url></a>
-  </aside>
+        </li>
+      </ol>
 
-  <section id="pricing" class="mt-14 scroll-mt-24 sm:mt-20">
-    <p class="eyebrow">pricing</p>
-    <div class="panel mt-4 overflow-hidden">
-      <div class="border-b border-base-content/8 px-6 py-7 sm:px-8">
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p class="text-sm text-base-content/55">
-              One payment link · unlimited sites
-            </p>
-            <p class="mt-2 text-4xl font-semibold tracking-tighter sm:text-5xl">
-              30 <span class="text-xl text-primary sm:text-2xl">USD / year</span>
+      <aside class="start-side">
+        <div id="pricing" class="panel price">
+          <div class="price-main">
+            <p class="price-label">One payment link, unlimited sites</p>
+            <p class="price-amount">
+              <span class="num">$30</span>
+              <span class="price-per">per year</span>
             </p>
           </div>
-          <p class="max-w-sm text-sm leading-relaxed text-base-content/55">
-            Your private payment link handles payments and renewals — no account required. Pay by
-            card or with USDC on Solana. Each additional $30 raises the shared monthly limit by
-            500,000 pageviews.
+          <dl class="price-facts">
+            <div>
+              <dt>Free trial</dt>
+              <dd>7 days</dd>
+            </div>
+            <div>
+              <dt>Included</dt>
+              <dd><span class="num">500,000</span> pageviews a month</dd>
+            </div>
+            <div>
+              <dt>Each extra $30</dt>
+              <dd>+<span class="num">500,000</span> pageviews a month</dd>
+            </div>
+          </dl>
+          <p class="price-note">
+            Pay by card or with USDC on Solana through your private payment link. No account
+            required.
           </p>
         </div>
-      </div>
-      <div class="grid divide-y divide-base-content/8 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <div class="px-6 py-5 sm:px-8">
-          <p class="eyebrow">trial</p>
-          <p class="mt-2 text-sm">7 days</p>
-        </div>
-        <div class="px-6 py-5 sm:px-8">
-          <p class="eyebrow">included</p>
-          <p class="mt-2 text-sm">500,000 pageviews per month</p>
-        </div>
-        <div class="px-6 py-5 sm:px-8">
-          <p class="eyebrow">top-up</p>
-          <p class="mt-2 text-sm">+500,000 pageviews per additional $30</p>
-        </div>
-      </div>
+
+        <aside
+          id="hads-create"
+          class="panel hads-unit"
+          data-hads-slot="create"
+          data-hads-topic="web analytics privacy"
+          data-hads-allow-self
+        >
+          <a data-hads-attribution class="hads-unit-attribution">Ads by HADS</a>
+          <strong data-hads-title>
+            <span class="hads-unit-skeleton hads-unit-skeleton--title" aria-hidden="true"></span>
+          </strong>
+          <p data-hads-text>
+            <span class="hads-unit-skeleton hads-unit-skeleton--text" aria-hidden="true"></span>
+            <span
+              class="hads-unit-skeleton hads-unit-skeleton--text hads-unit-skeleton--text-short"
+              aria-hidden="true"
+            ></span>
+          </p>
+          <a data-hads-url></a>
+        </aside>
+      </aside>
     </div>
   </section>
 
-  <article id="readme" class="readme readme-follow">
-    <p class="eyebrow">docs</p>
-    {raw(@readme)}
-  </article>
+  <div class="docs">
+    <nav class="docs-toc" aria-label="Documentation">
+      <p class="docs-toc-title">Documentation</p>
+      <ul>
+        <li :for={{id, title} <- @toc}><a href={"##{id}"}>{raw(title)}</a></li>
+      </ul>
+    </nav>
+    <article id="readme" class="readme readme-follow">
+      {raw(@readme)}
+    </article>
+  </div>
 </Layouts.shell>

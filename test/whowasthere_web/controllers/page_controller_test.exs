@@ -83,7 +83,8 @@ defmodule WhoWasThereWeb.PageControllerTest do
     refute html =~ ~s(id="create-a-site")
     refute html =~ "Put this in <code>head</code>"
     assert html =~ ~s(id="dashboard")
-    assert html =~ "One payment link · unlimited sites"
+    assert html =~ "One payment link, unlimited sites"
+    assert html =~ ~s(id="pricing")
     assert html =~ "500,000 pageviews per month"
     assert html =~ "private <code>pay URL</code>"
     assert html =~ "Blockchain transaction IDs are never credentials"

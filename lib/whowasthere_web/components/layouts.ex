@@ -73,7 +73,9 @@ defmodule WhoWasThereWeb.Layouts do
       if(@wide, do: "max-w-7xl", else: "max-w-3xl")
     ]}>
       <div class="rule mb-4" />
-      <p class="eyebrow">no cookies · no raw visit logs · aggregates only</p>
+      <p class="site-foot">
+        No cookies and no raw visit logs. Only aggregates are stored.
+      </p>
     </footer>
 
     <.flash_group flash={@flash} />

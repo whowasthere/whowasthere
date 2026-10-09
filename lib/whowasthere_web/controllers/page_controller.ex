@@ -5,6 +5,12 @@ defmodule WhoWasThereWeb.PageController do
     base = base_url(conn)
     info = WhoWasThere.Billing.info()
 
+    readme =
+      WhoWasThere.Readme.html(base,
+        omit_intro: true,
+        omit_sections: ["Create a site", "Add the tracker"]
+      )
+
     render(conn, :home,
       page_title: "who was there",
       base_url: base,
@@ -16,11 +22,8 @@ defmodule WhoWasThereWeb.PageController do
         url: base,
         image: "#{base}/images/icon-512.png"
       },
-      readme:
-        WhoWasThere.Readme.html(base,
-          omit_intro: true,
-          omit_sections: ["Create a site", "Add the tracker"]
-        )
+      readme: readme,
+      toc: toc(readme)
     )
   end
 
@@ -28,6 +31,10 @@ defmodule WhoWasThereWeb.PageController do
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(200, WhoWasThere.License.text())
+  end
+
+  defp toc(html) do
+    for [_, id, title] <- Regex.scan(~r/<h2 id="([^"]+)">([^<]+)<\/h2>/, html), do: {id, title}
   end
 
   defp base_url(conn) do

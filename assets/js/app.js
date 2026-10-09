@@ -228,6 +228,7 @@ const showPayment = (data, checked = false) => {
   if (plan) {
     const until = data.expires ? String(data.expires).slice(0, 10) : ""
     plan.textContent = planStatus(data.plan, until)
+    plan.className = `plan-badge plan-badge--${data.plan}`
   }
 
   const allowance = document.getElementById("payment-page-allowance")

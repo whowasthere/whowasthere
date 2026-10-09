@@ -143,7 +143,7 @@ defmodule WhoWasThereWeb.DashLive do
     ~H"""
     <Layouts.shell flash={@flash}>
       <section class="mx-auto max-w-lg py-20 text-center sm:py-28">
-        <p class="eyebrow">/d/…</p>
+        <p class="eyebrow">Dashboard</p>
         <h1 class="mt-5 text-2xl font-semibold tracking-tight">This link doesn’t work</h1>
         <p class="mt-3 leading-relaxed text-base-content/60">
           Only the secret dashboard URL returned by

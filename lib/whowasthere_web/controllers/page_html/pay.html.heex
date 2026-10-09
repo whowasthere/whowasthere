@@ -15,7 +15,7 @@
     data-checkout-url={~p"/pay/checkout"}
   >
     <header class="payment-page-header">
-      <p class="eyebrow">private payment profile</p>
+      <p class="eyebrow">Private payment profile</p>
       <h1>Pay or renew</h1>
       <p>
         Choose an amount, then pay by card or send USDC on Solana. A payment adds one year; every
@@ -27,7 +27,9 @@
       <div class="payment-page-summary">
         <div>
           <span>Status</span>
-          <strong id="payment-page-plan">{plan_status(@plan, @expires)}</strong>
+          <strong id="payment-page-plan" class={["plan-badge", "plan-badge--#{@plan}"]}>
+            {plan_status(@plan, @expires)}
+          </strong>
         </div>
         <div>
           <span>Shared allowance</span>
